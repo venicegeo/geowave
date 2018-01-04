@@ -70,6 +70,9 @@ else
 	fi
 	cp /usr/src/geowave/deploy/target/*${GEOWAVE_VERSION}-${VENDOR_VERSION}.jar .
 	cp /usr/src/geowave/deploy/target/*${GEOWAVE_VERSION}-${VENDOR_VERSION}.tar.gz .
+	
+        # Copy Accumulo Jars
+        cp /usr/src/geowave/deploy/target/*${GEOWAVE_VERSION}-${VENDOR_VERSION}-accumulo*.jar .
 fi
 cd ..
 
