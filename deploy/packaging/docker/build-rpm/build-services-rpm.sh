@@ -114,6 +114,8 @@ rm -f ${FPM_SCRIPTS}/gwtomcat_tools.sh
 cp geowave-${GEOWAVE_VERSION}-${VENDOR_VERSION}-gwtomcat.$TIME_TAG.noarch.rpm $WORKSPACE/${ARGS[buildroot]}/RPMS/${ARGS[arch]}/geowave-${GEOWAVE_VERSION}-${VENDOR_VERSION}-gwtomcat.${TIME_TAG}.noarch.rpm
 
 #grab the rest services war file
+echo "Copy REST Services file"
+ls -la $WORKSPACE/services/rest/target
 cp $WORKSPACE/services/rest/target/*${GEOWAVE_VERSION}-${VENDOR_VERSION}.war restservices.war
 
 #get geoserver the war files ready
