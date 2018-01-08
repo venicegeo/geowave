@@ -17,7 +17,8 @@ set -x
 trap 'chmod -R 777 $WORKSPACE' EXIT
 trap 'chmod -R 777 $WORKSPACE && exit' ERR
 
-GEOWAVE_VERSION=$(mvn -q -Dexec.executable="echo" -Dexec.args='${project.version}' --non-recursive -f $WORKSPACE/pom.xml exec:exec | sed -e 's/"//g' -e 's/-SNAPSHOT//g')
+GEOWAVE_VERSION_STR="$(mvn -q -Dexec.executable="echo" -Dexec.args='${project.version}' --non-recursive -f $WORKSPACE/pom.xml exec:exec $BUILD_ARGS "$@")"
+GEOWAVE_VERSION="$(echo ${GEOWAVE_VERSION_STR} | sed -e 's/"//g' -e 's/-SNAPSHOT//g')"
 # Set a default version
 VENDOR_VERSION=apache
 ACCUMULO_API="$(mvn -q -Dexec.executable="echo" -Dexec.args='${accumulo.api}' --non-recursive -f $WORKSPACE/pom.xml exec:exec $BUILD_ARGS "$@")"
@@ -39,9 +40,6 @@ mvn clean
 
 # Throughout the build, capture jace artifacts to support testing
 mkdir -p $WORKSPACE/deploy/target/geowave-c++/bin
-
-#GEOWAVE_VERSION_STR="$(mvn -q -Dexec.executable="echo" -Dexec.args='${project.version}' --non-recursive -f $WORKSPACE/pom.xml exec:exec $BUILD_ARGS "$@")"
-#GEOWAVE_VERSION="$(echo ${GEOWAVE_VERSION_STR} | sed -e 's/"//g' -e 's/-SNAPSHOT//g')"
 
 echo $GEOWAVE_VERSION > $WORKSPACE/deploy/target/version.txt
 if [[ "$GEOWAVE_VERSION_STR" =~ "-SNAPSHOT" ]]
