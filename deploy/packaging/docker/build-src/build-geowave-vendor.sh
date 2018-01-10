@@ -69,9 +69,9 @@ mvn -q package -am -pl deploy -P geowave-tools-singlejar -Dtools.finalName=geowa
 # Build Accumulo API Jars
 if [[ "$ACCUMULO_API" != "1.7" ]]; then
   mvn -q package -am -pl deploy -P geowave-tools-singlejar -Dtools.finalName=geowave-tools-${GEOWAVE_VERSION}-${VENDOR_VERSION}-accumulo1.7 $BUILD_ARGS "$@" -Daccumulo.version=1.7.2 -Daccumulo.api=1.7
-  mvn -q package -am -pl deploy -P accumulo-container-singlejar -Dtools.finalName=geowave-accumulo-${GEOWAVE_VERSION}-${VENDOR_VERSION}-accumulo1.7 $BUILD_ARGS "$@" -Daccumulo.version=1.7.2 -Daccumulo.api=1.7
-  mvn -q package -am -pl services/rest -P rest-services-war -Dtools.finalName=geowave-restservices-${GEOWAVE_VERSION}-${VENDOR_VERSION}-accumulo1.7 $BUILD_ARGS "$@" -Daccumulo.version=1.7.2 -Daccumulo.api=1.7
-  mvn -q package -am -pl deploy -P geotools-container-singlejar -Dtools.finalName=geowave-geoserver-${GEOWAVE_VERSION}-${VENDOR_VERSION}-accumulo1.7 $BUILD_ARGS "$@" -Daccumulo.version=1.7.2 -Daccumulo.api=1.7
+  mvn -q package -am -pl deploy -P accumulo-container-singlejar -Daccumulo.finalName=geowave-accumulo-${GEOWAVE_VERSION}-${VENDOR_VERSION}-accumulo1.7 $BUILD_ARGS "$@" -Daccumulo.version=1.7.2 -Daccumulo.api=1.7
+  mvn -q package -am -pl services/rest -P rest-services-war -Drestservices.finalName=geowave-restservices-${GEOWAVE_VERSION}-${VENDOR_VERSION}-accumulo1.7 $BUILD_ARGS "$@" -Daccumulo.version=1.7.2 -Daccumulo.api=1.7
+  mvn -q package -am -pl deploy -P geotools-container-singlejar -Dgeotools.finalName=geowave-geoserver-${GEOWAVE_VERSION}-${VENDOR_VERSION}-accumulo1.7 $BUILD_ARGS "$@" -Daccumulo.version=1.7.2 -Daccumulo.api=1.7
 else
   echo "Skipping Accumulo API Build"
 fi
