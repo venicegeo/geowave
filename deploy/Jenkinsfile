@@ -9,6 +9,7 @@ node ('master') {
           [$class: 'ParametersDefinitionProperty', parameterDefinitions: [
             [$class: 'StringParameterDefinition', name: 'rpm_bucket', defaultValue: '', description: 'Bucket name to push rpms to'],
             [$class: 'StringParameterDefinition', name: 'cache_bucket', defaultValue: '', description: 'Bucket to push maven cache to'],
+            [$class: 'StringParameterDefinition', name: 'local_repo_dir', defaultValue: '/var/www/geowave-efs/html/repos/snapshots', description: 'Path on the local filesystem to the repo'],
             [$class: 'ChoiceParameterDefinition', name: 'overwrite_parameters', choices: 'No\nYes', description: 'Set to yes to reset parameters to defaults'],
             ]
           ],
@@ -56,7 +57,9 @@ node ('master') {
 
   // Mark the build artifacts 'stage'....
   stage('Build and Publish RPMs'){
-    sh 'deploy/packaging/docker/docker-build-rpms.sh'
+    withEnv(["LOCAL_REPO_DIR={ params.local_repo_dir }"]) {
+      sh 'deploy/packaging/docker/docker-build-rpms.sh'
+    }
   }
 
 //   stage('Clean bucket and local space'){
