@@ -63,6 +63,8 @@ node ('master') {
         mavenLocalRepo: "${env.WORKSPACE}/docker-root/.m2/repository/",
         mavenOpts: "-Xmx2g -Xms1g",
         options: [junitPublisher(disabled: true), findbugsPublisher(disabled: true)]) {
+          sh '''GEOSERVER_VERSION="$(mvn -q -Dexec.executable="echo" -Dexec.args='${geoserver.version}' --non-recursive -f $WORKSPACE/pom.xml exec:exec $BUILD_ARGS)"'''
+          sh 'echo "Geoserver Version: $GEOSERVER_VERSION"'
           sh 'deploy/packaging/docker/docker-build-rpms.sh'
        }
     }
