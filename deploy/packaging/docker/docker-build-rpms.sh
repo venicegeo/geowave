@@ -34,8 +34,6 @@ WORKSPACE="$(pwd)"
 DOCKER_ROOT=$WORKSPACE/docker-root
 LOCAL_REPO_DIR="${LOCAL_REPO_DIR:-/var/www/geowave-efs/html/repos/snapshots}"
 LOCK_DIR=/var/lock/subsys
-GEOSERVER_VERSION="$(mvn -q -Dexec.executable="echo" -Dexec.args='${geoserver.version}' --non-recursive -f $WORKSPACE/pom.xml exec:exec $BUILD_ARGS)"
-echo "Geoserver Version: $GEOSERVER_VERSION"
 
 # If you'd like to build a different set of artifacts rename build-args-matrix.sh.example
 if [ -z $BUILD_ARGS_MATRIX  ]; then
@@ -122,7 +120,6 @@ do
       -e WORKSPACE=/usr/src/geowave \
       -e BUILD_ARGS="$build_args" \
       -e TIME_TAG="$TIME_TAG" \
-      -e GEOSERVER_VERSION="$GEOSERVER_VERSION" \
       -v $WORKSPACE:/usr/src/geowave \
       locationtech/geowave-centos7-rpm-build \
       /bin/bash -c \
