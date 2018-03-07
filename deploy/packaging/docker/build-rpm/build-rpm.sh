@@ -38,6 +38,8 @@ echo "---------------------------------------------------------------"
 # Ensure mounted volume permissions are OK for access
 chown -R root:root $WORKSPACE/deploy/packaging/rpm
 
+export -p
+
 # Now make sure the host can easily modify/delete generated artifacts
 chmod -R 777 $WORKSPACE/deploy/packaging/rpm
 
