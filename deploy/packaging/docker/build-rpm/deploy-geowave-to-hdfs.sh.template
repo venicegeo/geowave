@@ -6,8 +6,6 @@
 # deploy-geowave-to-hdfs.sh [--user HDFS_ROOT_USERNAME]
 #
 
-echo "RUNNING TEMPLATE!!!!!!\n"
-export -p
 
 # Test for installed apps required to run this script
 dependency_tests() {
@@ -148,3 +146,7 @@ su $HDFS_USER -c "hadoop fs -chown -R $DATASTORE_USER:$DATASTORE_USER $DATASTORE
 if [ $? -ne 0 ]; then
     echo >&2 "Unable to change ownership of the $DATASTORE_LIB_DIR directory in hdfs. Aborting."; exit 1;
 fi
+
+echo "EXPORT VARS"
+export -p
+
