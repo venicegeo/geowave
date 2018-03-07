@@ -6,6 +6,9 @@
 # deploy-geowave-to-hdfs.sh [--user HDFS_ROOT_USERNAME]
 #
 
+echo "RUNNING TEMPLATE!!!!!!\n"
+export -p
+
 # Test for installed apps required to run this script
 dependency_tests() {
     REQUIRED_APPS=('hadoop')
