@@ -166,7 +166,8 @@ if [[ -x "$(command -v aws)" ]] && [ -f /etc/hbase/conf/hbase-site.xml ]; then
     fi
 
     if [[ $GOTELEM -eq 1 ]] && [[ $CONTENT = "s3://"* ]]; then
-      aws cp $GEOWAVE_DATASTORE_HOME/geowave-$DATASTORE_TOKEN-$VENDOR_VERSION.jar $CONTENT/lib/geowave-tools-$VENDOR_VERSION-apache.jar
+      echo "s3 cp $GEOWAVE_DATASTORE_HOME/geowave-$DATASTORE_TOKEN-$VENDOR_VERSION.jar $CONTENT/lib/geowave-tools-$VENDOR_VERSION-apache.jar"
+      aws s3 cp $GEOWAVE_DATASTORE_HOME/geowave-$DATASTORE_TOKEN-$VENDOR_VERSION.jar $CONTENT/lib/geowave-tools-$VENDOR_VERSION-apache.jar
     fi
 
     if [ $GOTELEM -eq 1 ]; then
