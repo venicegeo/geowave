@@ -44,9 +44,13 @@ node ('master') {
 
   stage('Maven Deploy'){
     dir("${env.WORKSPACE}/docker-root") {
-      sh "aws s3 cp s3://${params.cache_bucket}/mvn-cache/mvn-repo-cache-latest.tar.gz . --quiet"
-      sh "tar xfz mvn-repo-cache-latest.tar.gz"
-      sh "rm mvn-repo-cache-latest.tar.gz"
+      sh """
+        if [[ -z $(aws s3api head-object --bucket ${params.cache_bucket} --key mvn-cache/mvn-repo-cache-latest.tar.gz) ]]; then
+          aws s3 cp s3://${params.cache_bucket}/mvn-cache/mvn-repo-cache-latest.tar.gz . --quiet
+          tar xfz mvn-repo-cache-latest.tar.gz
+          rm mvn-repo-cache-latest.tar.gz
+        fi
+    """
     }
     withMaven(
       maven: 'maven-3.5.2',
