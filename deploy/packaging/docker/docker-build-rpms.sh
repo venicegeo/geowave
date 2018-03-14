@@ -33,7 +33,6 @@ cd "$SCRIPT_DIR/../../.."
 WORKSPACE="$(pwd)"
 DOCKER_ROOT=$WORKSPACE/docker-root
 LOCAL_REPO_DIR="${LOCAL_REPO_DIR:-/var/www/geowave-efs/html/repos/snapshots}"
-echo $LOCAL_REPO_DIR
 LOCK_DIR=/var/lock/subsys
 
 # If you'd like to build a different set of artifacts rename build-args-matrix.sh.example
