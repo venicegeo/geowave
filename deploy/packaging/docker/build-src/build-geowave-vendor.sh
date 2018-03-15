@@ -63,6 +63,8 @@ mvn -q package -am -pl deploy -P geotools-container-singlejar -Dgeotools.finalNa
 
 mvn -q package -am -pl services/rest -P rest-services-war -Drestservices.finalName=geowave-restservices-${GEOWAVE_VERSION}-${VENDOR_VERSION} $BUILD_ARGS "$@"
 
+mvn -q package -am -pl services/grpc -P grpc-singlejar -Drestservices.finalName=geowave-grpc-${GEOWAVE_VERSION}-${VENDOR_VERSION} $BUILD_ARGS "$@"
+
 mvn -q package -am -pl deploy -P accumulo-container-singlejar -Daccumulo.finalName=geowave-accumulo-${GEOWAVE_VERSION}-${VENDOR_VERSION} $BUILD_ARGS "$@"
 
 mvn -q package -am -pl deploy -P hbase-container-singlejar -Dhbase.finalName=geowave-hbase-${GEOWAVE_VERSION}-${VENDOR_VERSION} $BUILD_ARGS "$@"
