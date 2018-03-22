@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.beust.jcommander.Parameters;
+import com.beust.jcommander.ParametersDelegate;
 
 import mil.nga.giat.geowave.core.cli.annotations.GeowaveOperation;
 import mil.nga.giat.geowave.core.cli.api.Command;
@@ -22,6 +23,7 @@ public class RunGrpcCommand extends
 		Command
 {
 	private static final Logger LOGGER = LoggerFactory.getLogger(RunGrpcCommand.class);
+	@ParametersDelegate
 	private RunGrpcOptions options;
 	/**
 	 * Prep the driver & run the operation.
