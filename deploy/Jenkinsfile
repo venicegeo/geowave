@@ -1,5 +1,6 @@
 #!groovy 
 
+
 node ('master') {
     def maven = tool 'maven-3.5.2'
     stage('Parameterize') {
