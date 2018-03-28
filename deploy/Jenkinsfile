@@ -22,6 +22,8 @@ node ('master') {
       error('Parameters Reset')
     }
   }
+  params.each{ k, v -> println "${k}:${v}" }
+
   // Setting java home for the withMaven block
   jdk = tool name: 'JDK18'
   env.JAVA_HOME = "${jdk}"
