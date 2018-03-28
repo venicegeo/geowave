@@ -22,7 +22,8 @@ node ('master') {
       error('Parameters Reset')
     }
   }
-  params.each{ k, v -> echo "${k}:${v}\n" }
+
+  echo params.LOCAL_REPO_DIR
 
   // Setting java home for the withMaven block
   jdk = tool name: 'JDK18'
