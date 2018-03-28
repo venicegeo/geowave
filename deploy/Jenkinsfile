@@ -22,7 +22,7 @@ node ('master') {
       error('Parameters Reset')
     }
   }
-  params.each{ k, v -> println "${k}:${v}" }
+  params.each{ k, v -> echo "${k}:${v}\n" }
 
   // Setting java home for the withMaven block
   jdk = tool name: 'JDK18'
