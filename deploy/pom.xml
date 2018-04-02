@@ -249,6 +249,80 @@
 				</plugins>
 			</build>
 		</profile>
+                <profile>
+                     <id>geowave-grpc</id>
+                     <dependencies>
+                                <dependency>
+                                        <groupId>mil.nga.giat</groupId>
+                                        <artifactId>geowave-grpc-server</artifactId>
+                                        <version>${project.version}</version>
+                                </dependency>
+                                <dependency>
+                                        <groupId>mil.nga.giat</groupId>
+                                        <artifactId>geowave-grpc-protobuf-shaded</artifactId>
+                                        <version>${project.version}</version>
+                                </dependency>
+                     </dependencies> 
+                     <build>
+                                <plugins>
+                                        <plugin>
+                                                <groupId>org.apache.maven.plugins</groupId>
+                                                <artifactId>maven-shade-plugin</artifactId>
+                                                <version>2.2</version>
+                                                <executions>
+                                                        <execution>
+                                                                <phase>package</phase>
+                                                                <goals>
+                                                                        <goal>shade</goal>
+                                                                </goals>
+                                                                <configuration>
+                                                                    <filters>
+                                                                                <filter>
+                                                                                        <artifact>*:*</artifact>
+                                                                                        <excludes>
+                                                                                                <exclude>META-INF/*.SF</exclude>
+                                                                                                <exclude>META-INF/*.DSA</exclude>
+                                                                                                <exclude>META-INF/*.RSA</exclude>
+                                                                                                <exclude>log4j.properties</exclude>
+                                                                                        </excludes>
+                                                                                </filter>
+                                                                        </filters>
+                                                                      <transformers>
+                                                                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                                                                        <manifestEntries>
+                                                                                                <Specification-Title>GeoWave-GRPC</Specification-Title>
+                                                                                                <Specification-Vendor>LocationTech</Specification-Vendor>
+                                                                                                <Specification-Version>${project.version}</Specification-Version>
+                                                                                                <Implementation-Title>mil.nga.giat.geowave</Implementation-Title>
+                                                                                                <Implementation-Vendor>LocationTech</Implementation-Vendor>
+                                                                                                <Implementation-Version>${project.version}</Implementation-Version>
+                                                                                        </manifestEntries>
+                                                                                </transformer>
+                                                                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
+                                                                                <!-- merges META-INF/javax.media.jai.registryFile.jai entries instead
+                                                                                        of overwriting -->
+                                                                                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                                                                                        <resource>META-INF/javax.media.jai.registryFile.jai</resource>
+                                                                                </transformer>
+                                                                                <!-- merges META-INF/registryFile.jai entries instead of overwriting -->
+                                                                                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                                                                                        <resource>META-INF/registryFile.jai</resource>
+                                                                                </transformer>
+                                                                                <!-- merges META-INF/registryFile.jaiext entries instead of overwriting -->
+                                                                                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                                                                                        <resource>META-INF/registryFile.jaiext</resource>
+                                                                                </transformer>
+                                                                        </transformers>
+                                                                        <createDependencyReducedPom>false</createDependencyReducedPom>
+                                                                        <minimizeJar>false</minimizeJar>
+                                                                        <finalName>${geotools.finalName}</finalName>
+                                                                    </configuration>
+                                                        </execution>
+                                                </executions>
+                                        </plugin>
+                                </plugins>
+                        </build>
+                </profile>
 		<profile>
 			<id>geotools-container-singlejar</id>
 			<properties>
