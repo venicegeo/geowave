@@ -315,7 +315,7 @@
                                                                         </transformers>
                                                                         <createDependencyReducedPom>false</createDependencyReducedPom>
                                                                         <minimizeJar>false</minimizeJar>
-                                                                        <finalName>${geotools.finalName}</finalName>
+                                                                        <finalName>${grpc.finalName}</finalName>
                                                                     </configuration>
                                                         </execution>
                                                 </executions>
