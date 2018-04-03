@@ -71,6 +71,8 @@ mvn -q package -am -pl deploy -P geowave-tools-singlejar -Dtools.finalName=geowa
 
 mvn -q package -am -pl deploy -P geowave-grpc -Dgrpc.finalName=geowave-grpc-${GEOWAVE_VERSION}-${VENDOR_VERSION} $BUILD_ARGS "$@"
 
+echo "mvn -q package -am -pl deploy -P geowave-grpc -Dgrpc.finalName=geowave-grpc-${GEOWAVE_VERSION}-${VENDOR_VERSION} $BUILD_ARGS \"$@\""
+
 # Build Accumulo API Jars
 if [[ "$ACCUMULO_API" != "1.7" ]]; then
   mvn -q package -am -pl deploy -P geowave-tools-singlejar -Dtools.finalName=geowave-tools-${GEOWAVE_VERSION}-${VENDOR_VERSION}-accumulo1.7 $BUILD_ARGS "$@" -Daccumulo.version=1.7.2 -Daccumulo.api=1.7
