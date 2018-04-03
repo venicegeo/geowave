@@ -69,7 +69,7 @@ mvn -q package -am -pl deploy -P hbase-container-singlejar -Dhbase.finalName=geo
 
 mvn -q package -am -pl deploy -P geowave-tools-singlejar -Dtools.finalName=geowave-tools-${GEOWAVE_VERSION}-${VENDOR_VERSION} $BUILD_ARGS "$@"
 
-mvn -q package -am -pl deploy -P geowave-grpc -Dtools.finalName=geowave-grpc-${GEOWAVE_VERSION}-${VENDOR_VERSION} $BUILD_ARGS "$@"
+mvn -q package -am -pl deploy -P geowave-grpc -Dgrpc.finalName=geowave-grpc-${GEOWAVE_VERSION}-${VENDOR_VERSION} $BUILD_ARGS "$@"
 
 # Build Accumulo API Jars
 if [[ "$ACCUMULO_API" != "1.7" ]]; then
@@ -83,6 +83,8 @@ fi
 
   # Copy the tools fat jar
 cp $WORKSPACE/deploy/target/geowave-tools-${GEOWAVE_VERSION}-${VENDOR_VERSION}.jar $WORKSPACE/deploy/target/geowave-c++/bin/geowave-tools-${GEOWAVE_VERSION}-${VENDOR_VERSION}.jar
+
+ls -al cp $WORKSPACE/deploy/target/
 
 # Run the Jace hack
 cd $WORKSPACE
