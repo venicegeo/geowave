@@ -80,7 +80,6 @@
 	</build>
 
 	<profiles>
-                <profiles>
                 <profile>
                         <id>geowave-grpc</id>
                         <dependencies>
