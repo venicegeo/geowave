@@ -10,7 +10,7 @@
 	<name>GeoWave Deployment Configurations</name>
 	<properties>
 		<tools.finalName>${project.artifactId}-${project.version}-tools</tools.finalName>
-                <grpc.finalName>${project.artifactId}-${project.version}-grpc</tools.finalName>
+                <grpc.finalName>${project.artifactId}-${project.version}-grpc</grpc.finalName>
 		<hbase.finalName>${project.artifactId}-${project.version}-hbase</hbase.finalName>
 		<accumulo.finalName>${project.artifactId}-${project.version}-accumulo</accumulo.finalName>
 		<geotools.finalName>${project.artifactId}-${project.version}-geoserver</geotools.finalName>
