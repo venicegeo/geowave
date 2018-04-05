@@ -85,7 +85,7 @@
                         <dependencies>
                                 <dependency>
                                         <groupId>mil.nga.giat</groupId>
-                                        <artifactId>geowave-analytic-spark</artifactId>
+                                        <artifactId>geowave-grpc-server</artifactId>
                                         <version>${project.version}</version>
                                 </dependency>
                         </dependencies>
@@ -93,7 +93,7 @@
                                 <plugins>
                                         <plugin>
                                                 <groupId>org.apache.maven.plugins</groupId>
-                                                <artifactId>maven-shade-plugin</artifactId>
+                                                <artifactId>geowave-grpc-server</artifactId>
                                                 <version>2.2</version>
                                                 <executions>
                                                         <execution>
