@@ -9,11 +9,11 @@
 	<artifactId>geowave-grpc-server</artifactId>
 	<name>GeoWave gRPC Server</name>
 	<dependencies>
-		<dependency>
+		<!--<dependency>
 			<groupId>mil.nga.giat</groupId>
 			<artifactId>geowave-deploy</artifactId>
 			<version>${project.version}</version>
-		</dependency>
+		</dependency>-->
 		<dependency>
 			<groupId>mil.nga.giat</groupId>
 			<artifactId>geowave-grpc-protobuf-shaded</artifactId>
