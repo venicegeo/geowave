@@ -151,7 +151,7 @@
                                                                         </transformers>
                                                                         <createDependencyReducedPom>false</createDependencyReducedPom>
                                                                         <minimizeJar>false</minimizeJar>
-                                                                        <finalName>${grpc.finalname}</finalName>
+                                                                        <finalName>${grpc.finalName}</finalName>
                                                                 </configuration>
                                                         </execution>
                                                 </executions>
