@@ -3,6 +3,7 @@ import re, os, sys
 from collections import OrderedDict
 import argparse
 
+os._exit(0)
 """
 Developer: Ahmed Kamel
 Company: Digital Globe | Radiant Blue
