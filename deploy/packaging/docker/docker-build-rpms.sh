@@ -89,7 +89,12 @@ docker run $DOCKER_ARGS --rm \
   /bin/bash -c \
   "cd \$WORKSPACE && deploy/packaging/docker/publish/publish-common-rpm.sh --buildroot deploy/packaging/rpm/centos/7 --arch noarch --repo geowave"
 
+
+
+echo "BUILD ARGS ARE:      "
+
 for build_args in "${BUILD_ARGS_MATRIX[@]}"
+echo $build_args
 do
     export BUILD_ARGS="$build_args"
     
