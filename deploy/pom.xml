@@ -81,7 +81,7 @@
 
 	<profiles>
                 <profile>
-                        <id>geowave-grpc-jar</id>
+                        <id>geowave-grpc-singlejar</id>
                         <dependencies>
                                 <dependency>
                                         <groupId>mil.nga.giat</groupId>
