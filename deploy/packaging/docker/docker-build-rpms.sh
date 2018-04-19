@@ -94,8 +94,8 @@ docker run $DOCKER_ARGS --rm \
 echo "BUILD ARGS ARE:      "
 
 for build_args in "${BUILD_ARGS_MATRIX[@]}"
-echo $build_args
 do
+echo $build_args
     export BUILD_ARGS="$build_args"
     
     $WORKSPACE/deploy/packaging/rpm/centos/7/rpm.sh --command clean
