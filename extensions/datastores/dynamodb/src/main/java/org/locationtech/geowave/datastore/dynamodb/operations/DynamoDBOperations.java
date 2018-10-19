@@ -20,18 +20,19 @@ import java.util.Set;
 import org.locationtech.geowave.core.index.ByteArrayId;
 import org.locationtech.geowave.core.index.ByteArrayUtils;
 import org.locationtech.geowave.core.store.adapter.AdapterIndexMappingStore;
-import org.locationtech.geowave.core.store.adapter.AdapterStore;
 import org.locationtech.geowave.core.store.adapter.InternalAdapterStore;
 import org.locationtech.geowave.core.store.adapter.PersistentAdapterStore;
 import org.locationtech.geowave.core.store.adapter.statistics.DataStatisticsStore;
 import org.locationtech.geowave.core.store.entities.GeoWaveRowMergingIterator;
 import org.locationtech.geowave.core.store.index.PrimaryIndex;
 import org.locationtech.geowave.core.store.metadata.AbstractGeoWavePersistence;
+import org.locationtech.geowave.core.store.operations.RowDeleter;
 import org.locationtech.geowave.core.store.operations.Deleter;
 import org.locationtech.geowave.core.store.operations.MetadataDeleter;
 import org.locationtech.geowave.core.store.operations.MetadataReader;
 import org.locationtech.geowave.core.store.operations.MetadataType;
 import org.locationtech.geowave.core.store.operations.MetadataWriter;
+import org.locationtech.geowave.core.store.operations.QueryAndDeleteByRow;
 import org.locationtech.geowave.core.store.operations.Reader;
 import org.locationtech.geowave.core.store.operations.ReaderParams;
 import org.locationtech.geowave.core.store.operations.Writer;
@@ -39,7 +40,6 @@ import org.locationtech.geowave.core.store.util.DataStoreUtils;
 import org.locationtech.geowave.datastore.dynamodb.DynamoDBClientPool;
 import org.locationtech.geowave.datastore.dynamodb.DynamoDBOptions;
 import org.locationtech.geowave.datastore.dynamodb.DynamoDBRow;
-import org.locationtech.geowave.datastore.dynamodb.DynamoDBRow.GuavaRowTranslationHelper;
 import org.locationtech.geowave.datastore.dynamodb.util.LazyPaginatedScan;
 import org.locationtech.geowave.mapreduce.MapReduceDataStoreOperations;
 import org.locationtech.geowave.mapreduce.splits.RecordReaderParams;
@@ -72,6 +72,7 @@ public class DynamoDBOperations implements
 	public static final String METADATA_PRIMARY_ID_KEY = "I";
 	public static final String METADATA_SECONDARY_ID_KEY = "S";
 	public static final String METADATA_TIMESTAMP_KEY = "T";
+	public static final String METADATA_VISIBILITY_KEY = "A";
 	public static final String METADATA_VALUE_KEY = "V";
 
 	private final AmazonDynamoDBAsync client;
@@ -343,11 +344,9 @@ public class DynamoDBOperations implements
 				this);
 	}
 
-	@Override
-	public Deleter createDeleter(
+	public RowDeleter createDeleter(
 			final ByteArrayId indexId,
-			final String... authorizations )
-			throws Exception {
+			final String... authorizations ) {
 		return new DynamoDBDeleter(
 				this,
 				getQualifiedTableName(indexId.getString()));
@@ -395,5 +394,15 @@ public class DynamoDBOperations implements
 			PrimaryIndex index )
 			throws IOException {
 		return createTable(getQualifiedTableName(index.getId().getString()));
+	}
+
+	@Override
+	public <T> Deleter<T> createDeleter(
+			ReaderParams<T> readerParams ) {
+		return new QueryAndDeleteByRow<>(
+				createDeleter(
+						readerParams.getIndex().getId(),
+						readerParams.getAdditionalAuthorizations()),
+				createReader(readerParams));
 	}
 }

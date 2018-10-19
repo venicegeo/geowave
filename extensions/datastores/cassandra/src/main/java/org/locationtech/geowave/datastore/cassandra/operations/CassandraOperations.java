@@ -42,11 +42,13 @@ import org.locationtech.geowave.core.store.entities.GeoWaveRow;
 import org.locationtech.geowave.core.store.entities.GeoWaveRowIteratorTransformer;
 import org.locationtech.geowave.core.store.index.PrimaryIndex;
 import org.locationtech.geowave.core.store.metadata.AbstractGeoWavePersistence;
+import org.locationtech.geowave.core.store.operations.RowDeleter;
 import org.locationtech.geowave.core.store.operations.Deleter;
 import org.locationtech.geowave.core.store.operations.MetadataDeleter;
 import org.locationtech.geowave.core.store.operations.MetadataReader;
 import org.locationtech.geowave.core.store.operations.MetadataType;
 import org.locationtech.geowave.core.store.operations.MetadataWriter;
+import org.locationtech.geowave.core.store.operations.QueryAndDeleteByRow;
 import org.locationtech.geowave.core.store.operations.Reader;
 import org.locationtech.geowave.core.store.operations.ReaderParams;
 import org.locationtech.geowave.core.store.operations.Writer;
@@ -90,11 +92,6 @@ public class CassandraOperations implements
 		MapReduceDataStoreOperations
 {
 	private final static Logger LOGGER = LoggerFactory.getLogger(CassandraOperations.class);
-	protected static final String PRIMARY_ID_KEY = "I";
-	protected static final String SECONDARY_ID_KEY = "S";
-	// serves as unique ID for instances where primary+secondary are repeated
-	protected static final String TIMESTAMP_ID_KEY = "T";
-	protected static final String VALUE_KEY = "V";
 	private final Session session;
 	private final String gwNamespace;
 	private final static int WRITE_RESPONSE_THREAD_SIZE = 16;
@@ -558,19 +555,24 @@ public class CassandraOperations implements
 						// create table
 						final Create create = getCreateTable(tableName);
 						create.addPartitionKey(
-								PRIMARY_ID_KEY,
+								CassandraMetadataWriter.PRIMARY_ID_KEY,
 								DataType.blob());
 						if (MetadataType.STATS.equals(metadataType)
 								|| MetadataType.INTERNAL_ADAPTER.equals(metadataType)) {
 							create.addClusteringColumn(
-									SECONDARY_ID_KEY,
+									CassandraMetadataWriter.SECONDARY_ID_KEY,
 									DataType.blob());
 							create.addClusteringColumn(
-									TIMESTAMP_ID_KEY,
+									CassandraMetadataWriter.TIMESTAMP_ID_KEY,
 									DataType.timeuuid());
+							if (MetadataType.STATS.equals(metadataType)) {
+								create.addColumn(
+										CassandraMetadataWriter.VISIBILITY_KEY,
+										DataType.blob());
+							}
 						}
 						create.addColumn(
-								VALUE_KEY,
+								CassandraMetadataWriter.VALUE_KEY,
 								DataType.blob());
 						executeCreateTable(
 								create,
@@ -613,11 +615,9 @@ public class CassandraOperations implements
 				this);
 	}
 
-	@Override
-	public Deleter createDeleter(
+	public RowDeleter createDeleter(
 			final ByteArrayId indexId,
-			final String... authorizations )
-			throws Exception {
+			final String... authorizations ) {
 		return new CassandraDeleter(
 				this,
 				indexId.getString());
@@ -670,5 +670,15 @@ public class CassandraOperations implements
 		return DataStoreUtils.mergeStats(
 				statsStore,
 				internalAdapterStore);
+	}
+
+	@Override
+	public <T> Deleter<T> createDeleter(
+			ReaderParams<T> readerParams ) {
+		return new QueryAndDeleteByRow<>(
+				createDeleter(
+						readerParams.getIndex().getId(),
+						readerParams.getAdditionalAuthorizations()),
+				createReader(readerParams));
 	}
 }

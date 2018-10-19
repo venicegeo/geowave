@@ -12,8 +12,10 @@ package org.locationtech.geowave.datastore.hbase.operations;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -67,6 +69,7 @@ import org.locationtech.geowave.core.index.ByteArrayUtils;
 import org.locationtech.geowave.core.index.Mergeable;
 import org.locationtech.geowave.core.index.MultiDimensionalCoordinateRangesArray;
 import org.locationtech.geowave.core.index.StringUtils;
+import org.locationtech.geowave.core.index.persist.PersistenceUtils;
 import org.locationtech.geowave.core.store.CloseableIterator;
 import org.locationtech.geowave.core.store.adapter.AdapterIndexMappingStore;
 import org.locationtech.geowave.core.store.adapter.DataAdapter;
@@ -79,12 +82,14 @@ import org.locationtech.geowave.core.store.filter.DistributableQueryFilter;
 import org.locationtech.geowave.core.store.index.PrimaryIndex;
 import org.locationtech.geowave.core.store.metadata.AbstractGeoWavePersistence;
 import org.locationtech.geowave.core.store.metadata.DataStatisticsStoreImpl;
+import org.locationtech.geowave.core.store.operations.RowDeleter;
 import org.locationtech.geowave.core.store.operations.Deleter;
 import org.locationtech.geowave.core.store.operations.MetadataDeleter;
 import org.locationtech.geowave.core.store.operations.MetadataQuery;
 import org.locationtech.geowave.core.store.operations.MetadataReader;
 import org.locationtech.geowave.core.store.operations.MetadataType;
 import org.locationtech.geowave.core.store.operations.MetadataWriter;
+import org.locationtech.geowave.core.store.operations.QueryAndDeleteByRow;
 import org.locationtech.geowave.core.store.operations.Reader;
 import org.locationtech.geowave.core.store.operations.ReaderParams;
 import org.locationtech.geowave.core.store.operations.Writer;
@@ -101,7 +106,10 @@ import org.locationtech.geowave.datastore.hbase.HBaseRow;
 import org.locationtech.geowave.datastore.hbase.HBaseStoreFactoryFamily;
 import org.locationtech.geowave.datastore.hbase.cli.config.HBaseOptions;
 import org.locationtech.geowave.datastore.hbase.cli.config.HBaseRequiredOptions;
+import org.locationtech.geowave.datastore.hbase.coprocessors.HBaseBulkDeleteEndpoint;
 import org.locationtech.geowave.datastore.hbase.coprocessors.protobuf.AggregationProtosClient;
+import org.locationtech.geowave.datastore.hbase.coprocessors.protobuf.HBaseBulkDeleteProtosClient;
+import org.locationtech.geowave.datastore.hbase.coprocessors.protobuf.HBaseBulkDeleteProtosClient.BulkDeleteResponse;
 import org.locationtech.geowave.datastore.hbase.filters.HBaseNumericIndexStrategyFilter;
 import org.locationtech.geowave.datastore.hbase.operations.GeoWaveColumnFamily.GeoWaveColumnFamilyFactory;
 import org.locationtech.geowave.datastore.hbase.operations.GeoWaveColumnFamily.StringColumnFamily;
@@ -128,6 +136,8 @@ public class HBaseOperations implements
 	private static final long SLEEP_INTERVAL = HConstants.DEFAULT_HBASE_SERVER_PAUSE;
 	private static final String SPLIT_STRING = Pattern.quote(".");
 	private static final int MAX_AGGREGATE_RETRIES = 3;
+	private static final int DELETE_BATCH_SIZE = 1000000;
+	private static final HBaseBulkDeleteProtosClient.BulkDeleteRequest.BulkDeleteType DELETE_TYPE = HBaseBulkDeleteProtosClient.BulkDeleteRequest.BulkDeleteType.ROW;
 
 	protected final Connection conn;
 
@@ -253,7 +263,9 @@ public class HBaseOperations implements
 			throws IOException {
 		synchronized (ADMIN_MUTEX) {
 			try (Admin admin = conn.getAdmin()) {
-				if (!admin.tableExists(tableName)) {
+				if (!admin
+						.tableExists(
+								tableName)) {
 					final HTableDescriptor desc = new HTableDescriptor(
 							tableName);
 
@@ -262,23 +274,40 @@ public class HBaseOperations implements
 					for (final Pair<GeoWaveColumnFamily, Boolean> columnFamilyAndVersioning : columnFamiliesAndVersioningPairs) {
 						final HColumnDescriptor column = columnFamilyAndVersioning.getLeft().toColumnDescriptor();
 						if (!columnFamilyAndVersioning.getRight()) {
-							column.setMaxVersions(Integer.MAX_VALUE);
+							column
+									.setMaxVersions(
+											Integer.MAX_VALUE);
 						}
-						desc.addFamily(column);
+						desc
+								.addFamily(
+										column);
 
-						cfSet.add(columnFamilyAndVersioning.getLeft());
+						cfSet
+								.add(
+										columnFamilyAndVersioning.getLeft());
 					}
 
-					cfCache.put(
-							tableName,
-							cfSet);
+					cfCache
+							.put(
+									tableName,
+									cfSet);
 
 					try {
 						if (!preSplits.isEmpty()) {
-							admin.createTable(desc, preSplits.stream().map(id -> id.getBytes()).toArray(i -> new byte[i][]));
+							admin
+									.createTable(
+											desc,
+											preSplits
+													.stream()
+													.map(
+															id -> id.getBytes())
+													.toArray(
+															i -> new byte[i][]));
 						}
 						else {
-							admin.createTable(desc);
+							admin
+									.createTable(
+											desc);
 						}
 					}
 					catch (final Exception e) {
@@ -299,17 +328,19 @@ public class HBaseOperations implements
 			final boolean enableVersioning,
 			final TableName tableName )
 			throws IOException {
-		createTable(preSplits,
+		createTable(
+				preSplits,
 				Arrays
 						.stream(
 								columnFamilies)
 						.map(
-								cf -> ImmutablePair.of(
-										cf,
-										enableVersioning))
+								cf -> ImmutablePair
+										.of(
+												cf,
+												enableVersioning))
 						.toArray(
 								Pair[]::new),
-						columnFamilyFactory,
+				columnFamilyFactory,
 				tableName);
 	}
 
@@ -532,7 +563,7 @@ public class HBaseOperations implements
 			final ByteArrayId indexId,
 			final Short adapterId,
 			final String... additionalAuthorizations ) {
-		Deleter deleter = null;
+		RowDeleter deleter = null;
 		Iterable<Result> scanner = null;
 		try {
 			deleter = createDeleter(
@@ -572,11 +603,9 @@ public class HBaseOperations implements
 					scan,
 					indexId.getString());
 			for (final Result result : scanner) {
-				deleter.delete(
-						new HBaseRow(
-								result,
-								index.getIndexStrategy().getPartitionKeyLength()),
-						adapter);
+				deleter.delete(new HBaseRow(
+						result,
+						index.getIndexStrategy().getPartitionKeyLength()));
 			}
 			return true;
 		}
@@ -1030,14 +1059,20 @@ public class HBaseOperations implements
 				this);
 	}
 
-	@Override
-	public Deleter createDeleter(
+	public RowDeleter createDeleter(
 			final ByteArrayId indexId,
-			final String... authorizations )
-			throws Exception {
-		final TableName tableName = getTableName(indexId.getString());
-		return new HBaseDeleter(
-				getBufferedMutator(tableName));
+			final String... authorizations ) {
+		try {
+			final TableName tableName = getTableName(indexId.getString());
+			return new HBaseRowDeleter(
+					getBufferedMutator(tableName));
+		}
+		catch (IOException ioe) {
+			LOGGER.error(
+					"Error creating deleter",
+					ioe);
+		}
+		return null;
 	}
 
 	public BufferedMutator getBufferedMutator(
@@ -1283,6 +1318,128 @@ public class HBaseOperations implements
 		return null;
 	}
 
+	public void bulkDelete(
+			final ReaderParams readerParams ) {
+		final String tableName = readerParams.getIndex().getId().getString();
+		Collection<Short> adapterIds = readerParams.getAdapterIds();
+		Long total = 0L;
+
+		try {
+			// Use the row count coprocessor
+			if (options.isVerifyCoprocessors()) {
+				verifyCoprocessor(
+						tableName,
+						"org.locationtech.geowave.datastore.hbase.coprocessors.HBaseBulkDeleteEndpoint",
+						options.getCoprocessorJar());
+			}
+
+			final HBaseBulkDeleteProtosClient.BulkDeleteRequest.Builder requestBuilder = HBaseBulkDeleteProtosClient.BulkDeleteRequest
+					.newBuilder();
+
+			requestBuilder.setDeleteType(DELETE_TYPE);
+			requestBuilder.setRowBatchSize(DELETE_BATCH_SIZE);
+
+			if (readerParams.getFilter() != null) {
+				final List<DistributableQueryFilter> distFilters = new ArrayList();
+				distFilters.add(readerParams.getFilter());
+
+				final byte[] filterBytes = PersistenceUtils.toBinary(distFilters);
+				final ByteString filterByteString = ByteString.copyFrom(filterBytes);
+				requestBuilder.setFilter(filterByteString);
+			}
+			else {
+				final List<MultiDimensionalCoordinateRangesArray> coords = readerParams.getCoordinateRanges();
+				if (!coords.isEmpty()) {
+					final byte[] filterBytes = new HBaseNumericIndexStrategyFilter(
+							readerParams.getIndex().getIndexStrategy(),
+							coords.toArray(new MultiDimensionalCoordinateRangesArray[] {})).toByteArray();
+					final ByteString filterByteString = ByteString.copyFrom(
+							new byte[] {
+								0
+							}).concat(
+							ByteString.copyFrom(filterBytes));
+
+					requestBuilder.setNumericIndexStrategyFilter(filterByteString);
+				}
+			}
+			requestBuilder.setModel(ByteString.copyFrom(PersistenceUtils.toBinary(readerParams
+					.getIndex()
+					.getIndexModel())));
+
+			int maxRangeDecomposition = readerParams.getMaxRangeDecomposition() == null ? options
+					.getAggregationMaxRangeDecomposition() : readerParams.getMaxRangeDecomposition();
+			final MultiRowRangeFilter multiFilter = getMultiRowRangeFilter(DataStoreUtils.constraintsToQueryRanges(
+					readerParams.getConstraints(),
+					readerParams.getIndex().getIndexStrategy(),
+					maxRangeDecomposition).getCompositeQueryRanges());
+			if (multiFilter != null) {
+				requestBuilder.setRangeFilter(ByteString.copyFrom(multiFilter.toByteArray()));
+			}
+			if ((adapterIds != null) && !adapterIds.isEmpty()) {
+				final ByteBuffer buf = ByteBuffer.allocate(2 * adapterIds.size());
+				for (final Short a : adapterIds) {
+					buf.putShort(a);
+				}
+				requestBuilder.setAdapterIds(ByteString.copyFrom(buf.array()));
+			}
+
+			final Table table = getTable(tableName);
+			final HBaseBulkDeleteProtosClient.BulkDeleteRequest request = requestBuilder.build();
+
+			byte[] startRow = null;
+			byte[] endRow = null;
+
+			final List<ByteArrayRange> ranges = readerParams.getQueryRanges().getCompositeQueryRanges();
+			if ((ranges != null) && !ranges.isEmpty()) {
+				final ByteArrayRange aggRange = getSingleRange(ranges);
+				startRow = aggRange.getStart().getBytes();
+				endRow = aggRange.getEnd().getBytes();
+			}
+			final Map<byte[], Long> results = table.coprocessorService(
+					HBaseBulkDeleteProtosClient.BulkDeleteService.class,
+					startRow,
+					endRow,
+					new Batch.Call<HBaseBulkDeleteProtosClient.BulkDeleteService, Long>() {
+						@Override
+						public Long call(
+								final HBaseBulkDeleteProtosClient.BulkDeleteService counter )
+								throws IOException {
+							final BlockingRpcCallback<HBaseBulkDeleteProtosClient.BulkDeleteResponse> rpcCallback = new BlockingRpcCallback<HBaseBulkDeleteProtosClient.BulkDeleteResponse>();
+							counter.delete(
+									null,
+									request,
+									rpcCallback);
+							final BulkDeleteResponse response = rpcCallback.get();
+							return response.hasRowsDeleted() ? response.getRowsDeleted() : null;
+						}
+					});
+
+			int regionCount = 0;
+			for (final Map.Entry<byte[], Long> entry : results.entrySet()) {
+				regionCount++;
+
+				final Long value = entry.getValue();
+				if (value != null) {
+					LOGGER.debug("Value from region " + regionCount + " is " + value);
+					total += value;
+				}
+				else {
+					LOGGER.debug("Empty response for region " + regionCount);
+				}
+			}
+		}
+		catch (final Exception e) {
+			LOGGER.error(
+					"Error during bulk delete.",
+					e);
+		}
+		catch (final Throwable e) {
+			LOGGER.error(
+					"Error during bulkdelete.",
+					e);
+		}
+	}
+
 	private ByteArrayRange getSingleRange(
 			final List<ByteArrayRange> ranges ) {
 		ByteArrayId start = null;
@@ -1458,11 +1615,15 @@ public class HBaseOperations implements
 						.append(
 								".")
 						.append(
-								HBaseUtils.writeTableNameAsConfigSafe(namespace))
+								HBaseUtils
+										.writeTableNameAsConfigSafe(
+												namespace))
 						.append(
 								".")
 						.append(
-								HBaseUtils.writeTableNameAsConfigSafe(qualifier))
+								HBaseUtils
+										.writeTableNameAsConfigSafe(
+												qualifier))
 						.append(
 								".")
 						.append(
@@ -1471,28 +1632,40 @@ public class HBaseOperations implements
 								".")
 						.toString();
 
-		desc.setConfiguration(
-				basePrefix + ServerSideOperationUtils.SERVER_OP_CLASS_KEY,
-				ByteArrayUtils.byteArrayToString(
-						URLClassloaderUtils.toClassId(
-								operationClassName)));
-		desc.setConfiguration(
-				basePrefix + ServerSideOperationUtils.SERVER_OP_PRIORITY_KEY,
-				Integer.toString(
-						priority));
+		desc
+				.setConfiguration(
+						basePrefix + ServerSideOperationUtils.SERVER_OP_CLASS_KEY,
+						ByteArrayUtils
+								.byteArrayToString(
+										URLClassloaderUtils
+												.toClassId(
+														operationClassName)));
+		desc
+				.setConfiguration(
+						basePrefix + ServerSideOperationUtils.SERVER_OP_PRIORITY_KEY,
+						Integer
+								.toString(
+										priority));
 
-		desc.setConfiguration(
-				basePrefix + ServerSideOperationUtils.SERVER_OP_SCOPES_KEY,
-				scopes.stream().map(
-						ServerOpScope::name).collect(
-								Collectors.joining(
-										",")));
-		final String optionsPrefix = String.format(
-				basePrefix + ServerSideOperationUtils.SERVER_OP_OPTIONS_PREFIX + ".");
+		desc
+				.setConfiguration(
+						basePrefix + ServerSideOperationUtils.SERVER_OP_SCOPES_KEY,
+						scopes
+								.stream()
+								.map(
+										ServerOpScope::name)
+								.collect(
+										Collectors
+												.joining(
+														",")));
+		final String optionsPrefix = String
+				.format(
+						basePrefix + ServerSideOperationUtils.SERVER_OP_OPTIONS_PREFIX + ".");
 		for (final Entry<String, String> e : properties.entrySet()) {
-			desc.setConfiguration(
-					optionsPrefix + e.getKey(),
-					e.getValue());
+			desc
+					.setConfiguration(
+							optionsPrefix + e.getKey(),
+							e.getValue());
 		}
 	}
 
@@ -1676,5 +1849,26 @@ public class HBaseOperations implements
 				options.isServerSideLibraryEnabled(),
 				getTableName(index.getId().getString()));
 		return true;
+	}
+
+	@Override
+	public <T> Deleter<T> createDeleter(
+			ReaderParams<T> readerParams ) {
+		if (isServerSideLibraryEnabled()) {
+			return new HBaseDeleter(
+					readerParams,
+					this);
+		}
+		else {
+			final RowDeleter rowDeleter = createDeleter(
+					readerParams.getIndex().getId(),
+					readerParams.getAdditionalAuthorizations());
+			if (rowDeleter != null) {
+				return new QueryAndDeleteByRow<>(
+						rowDeleter,
+						createReader(readerParams));
+			}
+			return new QueryAndDeleteByRow<>();
+		}
 	}
 }
