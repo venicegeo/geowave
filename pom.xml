@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.locationtech.geowave</groupId>
 	<artifactId>geowave-parent</artifactId>
@@ -43,6 +45,7 @@
 		<accumulo.api>1.9</accumulo.api>
 		<bigtable.version>1.2.0</bigtable.version>
 		<cassandra.version>3.11.3</cassandra.version>
+		<redisson.version>3.8.2</redisson.version>
 		<grpc.version>1.13.1</grpc.version>
 		<netty.version>4.1.25.Final</netty.version>
 		<protobuf.version>3.5.1</protobuf.version>
@@ -147,6 +150,11 @@
 				<version>0.9.3</version>
 			</dependency>
 			<dependency>
+				<groupId>com.clearspring.analytics</groupId>
+				<artifactId>stream</artifactId>
+				<version>2.9.6</version>
+			</dependency>
+			<dependency>
 				<groupId>org.bouncycastle</groupId>
 				<artifactId>bcprov-jdk15on</artifactId>
 				<version>1.60</version>
@@ -177,6 +185,11 @@
 				<groupId>javax.media</groupId>
 				<artifactId>jai_imageio</artifactId>
 				<version>1.1</version>
+			</dependency>
+			<dependency>
+				<groupId>com.github.ben-manes.caffeine</groupId>
+				<artifactId>caffeine</artifactId>
+				<version>2.6.2</version>
 			</dependency>
 			<dependency>
 				<groupId>com.vividsolutions</groupId>
@@ -246,9 +259,19 @@
 				<version>2.1</version>
 			</dependency>
 			<dependency>
+				<groupId>org.threeten</groupId>
+				<artifactId>threeten-extra</artifactId>
+				<version>1.4</version>
+			</dependency>
+			<dependency>
 				<groupId>org.xerial.snappy</groupId>
 				<artifactId>snappy-java</artifactId>
 				<version>${snappy.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.redisson</groupId>
+				<artifactId>redisson</artifactId>
+				<version>${redisson.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>org.apache.accumulo</groupId>
@@ -468,6 +491,12 @@
 			</dependency>
 			<dependency>
 				<groupId>org.geotools</groupId>
+				<artifactId>gt-cql</artifactId>
+				<version>${geotools.version}</version>
+				<scope>${geotools.scope}</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.geotools</groupId>
 				<artifactId>gt-geojson</artifactId>
 				<version>${geotools.version}</version>
 				<scope>${geotools.scope}</scope>
@@ -675,11 +704,11 @@
 				<groupId>com.fasterxml.jackson.dataformat</groupId>
 				<artifactId>jackson-dataformat-cbor</artifactId>
 				<version>${fasterxml.jackson.version}</version>
-			</dependency> 
+			</dependency>
 			<dependency>
-			    <groupId>com.fasterxml.jackson.module</groupId>
-			    <artifactId>jackson-module-scala_2.11</artifactId>
-			    <version>${fasterxml.jackson.version}</version>
+				<groupId>com.fasterxml.jackson.module</groupId>
+				<artifactId>jackson-module-scala_2.11</artifactId>
+				<version>${fasterxml.jackson.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>org.springframework.security</groupId>

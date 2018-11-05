@@ -58,7 +58,7 @@ import org.apache.accumulo.core.security.Authorizations;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.hadoop.io.Text;
 import org.apache.log4j.Logger;
-import org.locationtech.geowave.core.index.ByteArrayId;
+import org.locationtech.geowave.core.index.ByteArray;
 import org.locationtech.geowave.core.index.ByteArrayRange;
 import org.locationtech.geowave.core.index.ByteArrayUtils;
 import org.locationtech.geowave.core.index.IndexUtils;
@@ -68,11 +68,13 @@ import org.locationtech.geowave.core.index.StringUtils;
 import org.locationtech.geowave.core.index.persist.PersistenceUtils;
 import org.locationtech.geowave.core.store.DataStoreOptions;
 import org.locationtech.geowave.core.store.adapter.AdapterIndexMappingStore;
-import org.locationtech.geowave.core.store.adapter.DataAdapter;
 import org.locationtech.geowave.core.store.adapter.InternalAdapterStore;
+import org.locationtech.geowave.core.store.adapter.InternalDataAdapter;
 import org.locationtech.geowave.core.store.adapter.PersistentAdapterStore;
 import org.locationtech.geowave.core.store.adapter.statistics.DataStatisticsStore;
-import org.locationtech.geowave.core.store.index.PrimaryIndex;
+import org.locationtech.geowave.core.store.api.Aggregation;
+import org.locationtech.geowave.core.store.api.DataTypeAdapter;
+import org.locationtech.geowave.core.store.api.Index;
 import org.locationtech.geowave.core.store.metadata.AbstractGeoWavePersistence;
 import org.locationtech.geowave.core.store.metadata.DataStatisticsStoreImpl;
 import org.locationtech.geowave.core.store.operations.BaseReaderParams;
@@ -82,11 +84,10 @@ import org.locationtech.geowave.core.store.operations.MetadataReader;
 import org.locationtech.geowave.core.store.operations.MetadataType;
 import org.locationtech.geowave.core.store.operations.MetadataWriter;
 import org.locationtech.geowave.core.store.operations.QueryAndDeleteByRow;
-import org.locationtech.geowave.core.store.operations.Reader;
 import org.locationtech.geowave.core.store.operations.ReaderParams;
 import org.locationtech.geowave.core.store.operations.RowDeleter;
-import org.locationtech.geowave.core.store.operations.Writer;
-import org.locationtech.geowave.core.store.query.aggregate.Aggregation;
+import org.locationtech.geowave.core.store.operations.RowReader;
+import org.locationtech.geowave.core.store.operations.RowWriter;
 import org.locationtech.geowave.core.store.query.aggregate.CommonIndexAggregation;
 import org.locationtech.geowave.core.store.server.BasicOptionProvider;
 import org.locationtech.geowave.core.store.server.RowMergingAdapterOptionProvider;
@@ -148,7 +149,7 @@ public class AccumuloOperations implements
 	private long cacheTimeoutMillis;
 	private String password;
 	private final Map<String, Set<String>> ensuredAuthorizationCache = new HashMap<>();
-	private final Map<String, Set<ByteArrayId>> ensuredPartitionCache = new HashMap<>();
+	private final Map<String, Set<ByteArray>> ensuredPartitionCache = new HashMap<>();
 	private final AccumuloOptions options;
 
 	/**
@@ -302,15 +303,15 @@ public class AccumuloOperations implements
 
 	@Override
 	public boolean createIndex(
-			final PrimaryIndex index )
+			final Index index )
 			throws IOException {
 		return createTable(
-				index.getId().getString(),
+				index.getName(),
 				options.isServerSideLibraryEnabled(),
 				options.isEnableBlockCache());
 	}
 
-	public boolean createTable(
+	public synchronized boolean createTable(
 			final String tableName,
 			final boolean enableVersioning,
 			final boolean enableBlockCache ) {
@@ -445,7 +446,7 @@ public class AccumuloOperations implements
 
 	public boolean delete(
 			final String tableName,
-			final ByteArrayId rowId,
+			final ByteArray rowId,
 			final String columnFamily,
 			final byte[] columnQualifier,
 			final String... additionalAuthorizations ) {
@@ -488,7 +489,7 @@ public class AccumuloOperations implements
 
 	public boolean delete(
 			final String tableName,
-			final List<ByteArrayId> rowIds,
+			final List<ByteArray> rowIds,
 			final String columnFamily,
 			final byte[] columnQualifier,
 			final String... authorizations ) {
@@ -512,12 +513,12 @@ public class AccumuloOperations implements
 							columnFamily));
 				}
 			}
-			final Set<ByteArrayId> removeSet = new HashSet<>();
+			final Set<ByteArray> removeSet = new HashSet<>();
 			final List<Range> rowRanges = new ArrayList<>();
-			for (final ByteArrayId rowId : rowIds) {
+			for (final ByteArray rowId : rowIds) {
 				rowRanges.add(Range.exact(new Text(
 						rowId.getBytes())));
-				removeSet.add(new ByteArrayId(
+				removeSet.add(new ByteArray(
 						rowId.getBytes()));
 			}
 			deleter.setRanges(rowRanges);
@@ -525,7 +526,7 @@ public class AccumuloOperations implements
 			final Iterator<Map.Entry<Key, Value>> iterator = deleter.iterator();
 			while (iterator.hasNext()) {
 				final Entry<Key, Value> entry = iterator.next();
-				removeSet.remove(new ByteArrayId(
+				removeSet.remove(new ByteArray(
 						entry.getKey().getRowData().getBackingArray()));
 			}
 
@@ -550,11 +551,11 @@ public class AccumuloOperations implements
 
 	public boolean localityGroupExists(
 			final String tableName,
-			final byte[] localityGroup )
+			final String typeName )
 			throws AccumuloException,
 			TableNotFoundException {
 		final String qName = getQualifiedTableName(tableName);
-		final String localityGroupStr = qName + StringUtils.stringFromBinary(localityGroup);
+		final String localityGroupStr = qName + typeName;
 
 		// check the cache for our locality group
 		if (locGrpCache.containsKey(localityGroupStr)) {
@@ -570,7 +571,7 @@ public class AccumuloOperations implements
 		final boolean groupExists = connector.tableOperations().exists(
 				qName) && connector.tableOperations().getLocalityGroups(
 				qName).keySet().contains(
-				StringUtils.stringFromBinary(localityGroup));
+				typeName);
 
 		// update the cache
 		if (groupExists) {
@@ -584,12 +585,13 @@ public class AccumuloOperations implements
 
 	public void addLocalityGroup(
 			final String tableName,
-			final byte[] localityGroup )
+			final String typeName,
+			final short adapterId )
 			throws AccumuloException,
 			TableNotFoundException,
 			AccumuloSecurityException {
 		final String qName = getQualifiedTableName(tableName);
-		final String localityGroupStr = qName + StringUtils.stringFromBinary(localityGroup);
+		final String localityGroupStr = qName + typeName;
 
 		// check the cache for our locality group
 		if (locGrpCache.containsKey(localityGroupStr)) {
@@ -610,10 +612,10 @@ public class AccumuloOperations implements
 			final Set<Text> groupSet = new HashSet<>();
 
 			groupSet.add(new Text(
-					localityGroup));
+					ByteArrayUtils.shortToString(adapterId)));
 
 			localityGroups.put(
-					StringUtils.stringFromBinary(localityGroup),
+					typeName,
 					groupSet);
 
 			connector.tableOperations().setLocalityGroups(
@@ -746,10 +748,10 @@ public class AccumuloOperations implements
 	}
 
 	public void ensurePartition(
-			final ByteArrayId partition,
+			final ByteArray partition,
 			final String tableName ) {
 		final String qName = getQualifiedTableName(tableName);
-		Set<ByteArrayId> existingPartitions = ensuredPartitionCache.get(qName);
+		Set<ByteArray> existingPartitions = ensuredPartitionCache.get(qName);
 		try {
 			synchronized (ensuredPartitionCache) {
 				if (existingPartitions == null) {
@@ -758,7 +760,7 @@ public class AccumuloOperations implements
 							qName);
 					existingPartitions = new HashSet<>();
 					for (final Text s : splits) {
-						existingPartitions.add(new ByteArrayId(
+						existingPartitions.add(new ByteArray(
 								s.getBytes()));
 					}
 					ensuredPartitionCache.put(
@@ -955,22 +957,23 @@ public class AccumuloOperations implements
 
 	@Override
 	public boolean indexExists(
-			final ByteArrayId indexId )
+			final String indexName )
 			throws IOException {
-		final String qName = getQualifiedTableName(indexId.getString());
+		final String qName = getQualifiedTableName(indexName);
 		return connector.tableOperations().exists(
 				qName);
 	}
 
 	@Override
 	public boolean deleteAll(
-			final ByteArrayId indexId,
+			final String indexName,
+			final String typeName,
 			final Short adapterId,
 			final String... additionalAuthorizations ) {
 		BatchDeleter deleter = null;
 		try {
 			deleter = createBatchDeleter(
-					indexId.getString(),
+					indexName,
 					additionalAuthorizations);
 
 			deleter.setRanges(Arrays.asList(new Range()));
@@ -981,7 +984,7 @@ public class AccumuloOperations implements
 		}
 		catch (final TableNotFoundException | MutationsRejectedException e) {
 			LOGGER.warn(
-					"Unable to delete row from table [" + indexId.getString() + "].",
+					"Unable to delete row from table [" + indexName + "].",
 					e);
 			return false;
 		}
@@ -995,9 +998,9 @@ public class AccumuloOperations implements
 
 	protected <T> ScannerBase getScanner(
 			final ReaderParams<T> params,
-			boolean delete ) {
+			final boolean delete ) {
 		final List<ByteArrayRange> ranges = params.getQueryRanges().getCompositeQueryRanges();
-		final String tableName = StringUtils.stringFromBinary(params.getIndex().getId().getBytes());
+		final String tableName = params.getIndex().getName();
 		ScannerBase scanner;
 		try {
 			if (!params.isAggregation() && (ranges != null) && (ranges.size() == 1) && !delete) {
@@ -1074,7 +1077,7 @@ public class AccumuloOperations implements
 					e);
 			return null;
 		}
-		if ((params.getAdapterIds() != null) && !params.getAdapterIds().isEmpty()) {
+		if ((params.getAdapterIds() != null) && (params.getAdapterIds().length > 0)) {
 			for (final short adapterId : params.getAdapterIds()) {
 				scanner.fetchColumnFamily(new Text(
 						ByteArrayUtils.shortToString(adapterId)));
@@ -1199,15 +1202,15 @@ public class AccumuloOperations implements
 			final BaseReaderParams<T> params,
 			final ScannerBase scanner ) {
 		if ((params.getFieldSubsets() != null) && !params.isAggregation()) {
-			final List<String> fieldIds = params.getFieldSubsets().getLeft();
-			final DataAdapter<?> associatedAdapter = params.getFieldSubsets().getRight();
-			if ((fieldIds != null) && (!fieldIds.isEmpty()) && (associatedAdapter != null)) {
+			final String[] fieldNames = params.getFieldSubsets().getLeft();
+			final DataTypeAdapter<?> associatedAdapter = params.getFieldSubsets().getRight();
+			if ((fieldNames != null) && (fieldNames.length > 0) && (associatedAdapter != null)) {
 				final IteratorSetting iteratorSetting = AttributeSubsettingIterator.getIteratorSetting();
 
-				AttributeSubsettingIterator.setFieldIds(
+				AttributeSubsettingIterator.setFieldNames(
 						iteratorSetting,
 						associatedAdapter,
-						fieldIds,
+						fieldNames,
 						params.getIndex().getIndexModel());
 
 				iteratorSetting.addOption(
@@ -1236,7 +1239,7 @@ public class AccumuloOperations implements
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public <T> Reader<T> createReader(
+	public <T> RowReader<T> createReader(
 			final ReaderParams<T> params ) {
 		final ScannerBase scanner = getScanner(
 				params,
@@ -1259,7 +1262,7 @@ public class AccumuloOperations implements
 	protected <T> Scanner getScanner(
 			final RecordReaderParams<T> params ) {
 		final GeoWaveRowRange range = params.getRowRange();
-		final String tableName = StringUtils.stringFromBinary(params.getIndex().getId().getBytes());
+		final String tableName = params.getIndex().getName();
 		Scanner scanner;
 		try {
 			scanner = createScanner(
@@ -1312,7 +1315,7 @@ public class AccumuloOperations implements
 					e);
 			return null;
 		}
-		if ((params.getAdapterIds() != null) && !params.getAdapterIds().isEmpty()) {
+		if ((params.getAdapterIds() != null) && (params.getAdapterIds().length > 0)) {
 			for (final Short adapterId : params.getAdapterIds()) {
 				scanner.fetchColumnFamily(new Text(
 						ByteArrayUtils.shortToString(adapterId)));
@@ -1323,7 +1326,7 @@ public class AccumuloOperations implements
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public <T> Reader<T> createReader(
+	public <T> RowReader<T> createReader(
 			final RecordReaderParams<T> readerParams ) {
 		final ScannerBase scanner = getScanner(readerParams);
 		addConstraintsScanIteratorSettings(
@@ -1339,13 +1342,16 @@ public class AccumuloOperations implements
 				false);
 	}
 
-	public RowDeleter createDeleter(
-			final ByteArrayId indexId,
+	@Override
+	public RowDeleter createRowDeleter(
+			final String indexName,
+			final PersistentAdapterStore adapterStore,
+			final InternalAdapterStore internalAdapterStore,
 			final String... authorizations ) {
 		try {
 			return new AccumuloRowDeleter(
 					createBatchDeleter(
-							indexId.getString(),
+							indexName,
 							authorizations));
 		}
 		catch (final TableNotFoundException e) {
@@ -1357,15 +1363,29 @@ public class AccumuloOperations implements
 	}
 
 	@Override
-	public Writer createWriter(
-			final PrimaryIndex index,
-			final short internalAdapterId ) {
-		final String tableName = index.getId().getString();
-		if (options.isCreateTable()) {
-			createTable(
-					tableName,
-					options.isServerSideLibraryEnabled(),
-					options.isEnableBlockCache());
+	public RowWriter createWriter(
+			final Index index,
+			final InternalDataAdapter<?> adapter ) {
+		final String tableName = index.getName();
+		if (createTable(
+				tableName,
+				options.isServerSideLibraryEnabled(),
+				options.isEnableBlockCache())) {
+			try {
+				if (options.isUseLocalityGroups() && !localityGroupExists(
+						tableName,
+						adapter.getTypeName())) {
+					addLocalityGroup(
+							tableName,
+							adapter.getTypeName(),
+							adapter.getAdapterId());
+				}
+			}
+			catch (AccumuloException | TableNotFoundException | AccumuloSecurityException e) {
+				LOGGER.error(
+						"unexpected error while looking up locality group",
+						e);
+			}
 		}
 
 		try {
@@ -1403,13 +1423,11 @@ public class AccumuloOperations implements
 	@Override
 	public MetadataWriter createMetadataWriter(
 			final MetadataType metadataType ) {
-		if (options.isCreateTable()) {
-			// this checks for existence prior to create
-			createTable(
-					AbstractGeoWavePersistence.METADATA_TABLE,
-					false,
-					options.isEnableBlockCache());
-		}
+		// this checks for existence prior to create
+		createTable(
+				AbstractGeoWavePersistence.METADATA_TABLE,
+				false,
+				options.isEnableBlockCache());
 		if (MetadataType.STATS.equals(metadataType) && options.isServerSideLibraryEnabled()) {
 			synchronized (this) {
 				if (!iteratorsAttached) {
@@ -1460,16 +1478,20 @@ public class AccumuloOperations implements
 
 	@Override
 	public boolean mergeData(
-			final PrimaryIndex index,
+			final Index index,
 			final PersistentAdapterStore adapterStore,
+			final InternalAdapterStore internalAdapterStore,
 			final AdapterIndexMappingStore adapterIndexMappingStore ) {
 		if (options.isServerSideLibraryEnabled()) {
-			return compactTable(index.getId().getString());
+			return compactTable(index.getName());
 		}
 		else {
 			return DataStoreUtils.mergeData(
+					this,
+					options,
 					index,
 					adapterStore,
+					internalAdapterStore,
 					adapterIndexMappingStore);
 		}
 	}
@@ -1779,7 +1801,7 @@ public class AccumuloOperations implements
 		final ScannerBase scanner = getScanner(
 				readerParams,
 				true);
-		if (readerParams.isMixedVisibility() || scanner == null) {
+		if (readerParams.isMixedVisibility() || (scanner == null)) {
 			// currently scanner shouldn't be null, but in the future this could
 			// be used to imply that range or bulk delete is unnecessary and we
 			// instead simply delete by row ID
@@ -1791,8 +1813,10 @@ public class AccumuloOperations implements
 			// combining the visibilities of a single row without
 			// WholeRowIterator so therefore we need to backup to using the
 			// slower delete by row technique
-			final RowDeleter rowDeleter = createDeleter(
-					readerParams.getIndex().getId(),
+			final RowDeleter rowDeleter = createRowDeleter(
+					readerParams.getIndex().getName(),
+					readerParams.getAdapterStore(),
+					readerParams.getInternalAdapterStore(),
 					readerParams.getAdditionalAuthorizations());
 			if (rowDeleter != null) {
 				return new QueryAndDeleteByRow<>(

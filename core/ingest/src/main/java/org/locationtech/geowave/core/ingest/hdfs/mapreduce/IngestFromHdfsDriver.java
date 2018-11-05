@@ -22,11 +22,11 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.util.ToolRunner;
-import org.locationtech.geowave.core.ingest.DataAdapterProvider;
 import org.locationtech.geowave.core.ingest.IngestUtils;
 import org.locationtech.geowave.core.store.cli.remote.options.DataStorePluginOptions;
 import org.locationtech.geowave.core.store.cli.remote.options.IndexPluginOptions;
 import org.locationtech.geowave.core.store.cli.remote.options.VisibilityOptions;
+import org.locationtech.geowave.core.store.ingest.DataAdapterProvider;
 import org.locationtech.geowave.mapreduce.GeoWaveConfiguratorBase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -98,11 +98,12 @@ public class IngestFromHdfsDriver
 		final Path hdfsBaseDirectory = new Path(
 				basePath);
 		try {
-			final Configuration conf = new Configuration();
+			final Configuration conf = new Configuration(false);
 			GeoWaveConfiguratorBase.setRemoteInvocationParams(
 					hdfsHostPort,
 					mapReduceOptions.getJobTrackerOrResourceManagerHostPort(),
 					conf);
+			mapReduceOptions.applyConfigurationProperties(conf);
 			try (FileSystem fs = FileSystem.get(conf)) {
 				if (!fs.exists(hdfsBaseDirectory)) {
 					LOGGER.error(

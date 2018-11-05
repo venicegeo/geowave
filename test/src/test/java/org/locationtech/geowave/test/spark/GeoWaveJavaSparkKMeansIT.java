@@ -1,6 +1,6 @@
 /*******************************************************************************
  * Copyright (c) 2013-2018 Contributors to the Eclipse Foundation
- *   
+ *
  *  See the NOTICE file distributed with this work for additional
  *  information regarding copyright ownership.
  *  All rights reserved. This program and the accompanying materials
@@ -25,24 +25,19 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.locationtech.geowave.analytic.spark.kmeans.KMeansHullGenerator;
 import org.locationtech.geowave.analytic.spark.kmeans.KMeansRunner;
-import org.locationtech.geowave.core.geotime.TimeUtils;
-import org.locationtech.geowave.core.index.ByteArrayId;
-import org.locationtech.geowave.core.index.StringUtils;
+import org.locationtech.geowave.core.geotime.util.TimeUtils;
 import org.locationtech.geowave.core.store.CloseableIterator;
-import org.locationtech.geowave.core.store.DataStore;
-import org.locationtech.geowave.core.store.adapter.DataAdapter;
-import org.locationtech.geowave.core.store.adapter.InternalAdapterStore;
+import org.locationtech.geowave.core.store.api.DataStore;
+import org.locationtech.geowave.core.store.api.DataTypeAdapter;
+import org.locationtech.geowave.core.store.api.QueryBuilder;
 import org.locationtech.geowave.core.store.cli.remote.options.DataStorePluginOptions;
-import org.locationtech.geowave.core.store.query.EverythingQuery;
-import org.locationtech.geowave.core.store.query.QueryOptions;
 import org.locationtech.geowave.test.GeoWaveITRunner;
 import org.locationtech.geowave.test.TestUtils;
 import org.locationtech.geowave.test.TestUtils.DimensionalityType;
 import org.locationtech.geowave.test.annotation.Environments;
-import org.locationtech.geowave.test.annotation.GeoWaveTestStore;
 import org.locationtech.geowave.test.annotation.Environments.Environment;
+import org.locationtech.geowave.test.annotation.GeoWaveTestStore;
 import org.locationtech.geowave.test.annotation.GeoWaveTestStore.GeoWaveStoreType;
-import org.locationtech.geowave.test.spark.SparkTestEnvironment;
 import org.opengis.feature.simple.SimpleFeature;
 import org.opengis.feature.type.AttributeDescriptor;
 import org.slf4j.Logger;
@@ -69,7 +64,8 @@ public class GeoWaveJavaSparkKMeansIT
 		GeoWaveStoreType.BIGTABLE,
 		// TODO: Dynamo test takes too long to finish on Travis (>5 minutes)
 		// GeoWaveStoreType.DYNAMODB,
-		GeoWaveStoreType.CASSANDRA
+		GeoWaveStoreType.CASSANDRA,
+		GeoWaveStoreType.REDIS
 	})
 	protected DataStorePluginOptions inputDataStore;
 
@@ -100,7 +96,6 @@ public class GeoWaveJavaSparkKMeansIT
 	@Test
 	public void testKMeansRunner()
 			throws Exception {
-		SparkContext context = SparkTestEnvironment.getInstance().getDefaultContext();
 
 		// Load data
 		TestUtils.testLocalIngest(
@@ -109,14 +104,12 @@ public class GeoWaveJavaSparkKMeansIT
 				HAIL_SHAPEFILE_FILE,
 				1);
 
-		String adapterId = "hail";
-
 		// Create the runner
 		long mark = System.currentTimeMillis();
 		final KMeansRunner runner = new KMeansRunner();
-		runner.setJavaSparkContext(JavaSparkContext.fromSparkContext(context));
+		runner.setSparkSession(SparkTestEnvironment.getInstance().defaultSession);
 		runner.setInputDataStore(inputDataStore);
-		runner.setAdapterId(adapterId);
+		runner.setTypeName("hail");
 		runner.setCqlFilter(CQL_FILTER);
 		runner.setUseTime(true);
 		// Set output params to write centroids + hulls to store.
@@ -143,10 +136,10 @@ public class GeoWaveJavaSparkKMeansIT
 		LOGGER.warn("KMeans duration: " + dur + " ms.");
 		// Write out the centroid features
 
-		short centroidInternalAdapterId = inputDataStore.createInternalAdapterStore().getInternalAdapterId(
-				new ByteArrayId(
-						"kmeans-centroids-test"));
-		DataAdapter centroidAdapter = inputDataStore.createAdapterStore().getAdapter(
+		final short centroidInternalAdapterId = inputDataStore.createInternalAdapterStore().getAdapterId(
+
+				"kmeans-centroids-test");
+		final DataTypeAdapter centroidAdapter = inputDataStore.createAdapterStore().getAdapter(
 				centroidInternalAdapterId);
 
 		// Query back from the new adapter
@@ -175,11 +168,10 @@ public class GeoWaveJavaSparkKMeansIT
 
 		}
 
-		short hullInternalAdapterId = inputDataStore.createInternalAdapterStore().getInternalAdapterId(
-				new ByteArrayId(
-						"kmeans-hulls-test"));
+		final short hullInternalAdapterId = inputDataStore.createInternalAdapterStore().getAdapterId(
+				"kmeans-hulls-test");
 		// Write out the hull features w/ metadata
-		DataAdapter hullAdapter = inputDataStore.createAdapterStore().getAdapter(
+		final DataTypeAdapter hullAdapter = inputDataStore.createAdapterStore().getAdapter(
 				hullInternalAdapterId);
 
 		mark = System.currentTimeMillis();
@@ -195,16 +187,14 @@ public class GeoWaveJavaSparkKMeansIT
 	}
 
 	private void queryFeatures(
-			final DataAdapter dataAdapter,
+			final DataTypeAdapter dataAdapter,
 			final int expectedCount ) {
 		final DataStore featureStore = inputDataStore.createDataStore();
 		int count = 0;
 
-		try (final CloseableIterator<?> iter = featureStore.query(
-				new QueryOptions(
-						dataAdapter.getAdapterId(),
-						TestUtils.DEFAULT_SPATIAL_INDEX.getId()),
-				new EverythingQuery())) {
+		try (final CloseableIterator<?> iter = featureStore.query(QueryBuilder.newBuilder().addTypeName(
+				dataAdapter.getTypeName()).indexName(
+				TestUtils.DEFAULT_SPATIAL_INDEX.getName()).build())) {
 
 			while (iter.hasNext()) {
 				final Object maybeFeat = iter.next();
@@ -219,11 +209,11 @@ public class GeoWaveJavaSparkKMeansIT
 				count++;
 				LOGGER.warn(count + ": " + isFeat.getID() + " - " + geom.toString());
 
-				for (AttributeDescriptor attrDesc : isFeat.getFeatureType().getAttributeDescriptors()) {
+				for (final AttributeDescriptor attrDesc : isFeat.getFeatureType().getAttributeDescriptors()) {
 					final Class<?> bindingClass = attrDesc.getType().getBinding();
 					if (TimeUtils.isTemporal(bindingClass)) {
-						String timeField = attrDesc.getLocalName();
-						Date time = (Date) isFeat.getAttribute(timeField);
+						final String timeField = attrDesc.getLocalName();
+						final Date time = (Date) isFeat.getAttribute(timeField);
 						LOGGER.warn("  time = " + time);
 					}
 					else {
@@ -233,8 +223,7 @@ public class GeoWaveJavaSparkKMeansIT
 
 			}
 
-			LOGGER.warn("Counted " + count + " features in datastore for "
-					+ StringUtils.stringFromBinary(dataAdapter.getAdapterId().getBytes()));
+			LOGGER.warn("Counted " + count + " features in datastore for " + dataAdapter.getTypeName());
 		}
 		catch (final Exception e) {
 			e.printStackTrace();

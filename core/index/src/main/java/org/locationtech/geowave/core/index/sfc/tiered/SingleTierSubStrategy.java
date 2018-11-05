@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.apache.log4j.Logger;
-import org.locationtech.geowave.core.index.ByteArrayId;
+import org.locationtech.geowave.core.index.ByteArray;
 import org.locationtech.geowave.core.index.ByteArrayUtils;
 import org.locationtech.geowave.core.index.IndexMetaData;
 import org.locationtech.geowave.core.index.IndexUtils;
@@ -32,7 +32,6 @@ import org.locationtech.geowave.core.index.SinglePartitionInsertionIds;
 import org.locationtech.geowave.core.index.StringUtils;
 import org.locationtech.geowave.core.index.dimension.NumericDimensionDefinition;
 import org.locationtech.geowave.core.index.dimension.bin.BinRange;
-import org.locationtech.geowave.core.index.persist.Persistable;
 import org.locationtech.geowave.core.index.persist.PersistenceUtils;
 import org.locationtech.geowave.core.index.sfc.SpaceFillingCurve;
 import org.locationtech.geowave.core.index.sfc.binned.BinnedSFCUtils;
@@ -91,9 +90,9 @@ public class SingleTierSubStrategy implements
 
 	@Override
 	public MultiDimensionalNumericData getRangeForId(
-			final ByteArrayId partitionKey,
-			final ByteArrayId sortKey ) {
-		final List<ByteArrayId> insertionIds = new SinglePartitionInsertionIds(
+			final ByteArray partitionKey,
+			final ByteArray sortKey ) {
+		final List<ByteArray> insertionIds = new SinglePartitionInsertionIds(
 				partitionKey,
 				sortKey).getCompositeInsertionIds();
 		if (insertionIds.isEmpty()) {
@@ -110,8 +109,8 @@ public class SingleTierSubStrategy implements
 
 	@Override
 	public MultiDimensionalCoordinates getCoordinatesPerDimension(
-			final ByteArrayId partitionKey,
-			final ByteArrayId sortKey ) {
+			final ByteArray partitionKey,
+			final ByteArray sortKey ) {
 		final byte[] rowId = ByteArrayUtils.combineArrays(
 				partitionKey == null ? null : partitionKey.getBytes(),
 				sortKey == null ? null : sortKey.getBytes());
@@ -291,7 +290,7 @@ public class SingleTierSubStrategy implements
 	}
 
 	@Override
-	public Set<ByteArrayId> getInsertionPartitionKeys(
+	public Set<ByteArray> getInsertionPartitionKeys(
 			final MultiDimensionalNumericData insertionData ) {
 		return IndexUtils.getInsertionPartitionKeys(
 				this,
@@ -299,7 +298,7 @@ public class SingleTierSubStrategy implements
 	}
 
 	@Override
-	public Set<ByteArrayId> getQueryPartitionKeys(
+	public Set<ByteArray> getQueryPartitionKeys(
 			final MultiDimensionalNumericData queryData,
 			final IndexMetaData... hints ) {
 		return IndexUtils.getQueryPartitionKeys(
@@ -309,7 +308,7 @@ public class SingleTierSubStrategy implements
 	}
 
 	@Override
-	public Set<ByteArrayId> getPredefinedSplits() {
+	public Set<ByteArray> getPredefinedSplits() {
 		return Collections.EMPTY_SET;
 	}
 }

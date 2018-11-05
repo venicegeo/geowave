@@ -1,6 +1,6 @@
 /*******************************************************************************
  * Copyright (c) 2013-2018 Contributors to the Eclipse Foundation
- *   
+ *
  *  See the NOTICE file distributed with this work for additional
  *  information regarding copyright ownership.
  *  All rights reserved. This program and the accompanying materials
@@ -14,6 +14,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
@@ -23,6 +24,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.commons.lang3.ArrayUtils;
 import org.locationtech.geowave.core.index.ByteArrayRange;
 import org.locationtech.geowave.core.index.SinglePartitionQueryRanges;
 import org.locationtech.geowave.core.store.CloseableIterator;
@@ -30,6 +32,7 @@ import org.locationtech.geowave.core.store.CloseableIteratorWrapper;
 import org.locationtech.geowave.core.store.entities.GeoWaveRow;
 import org.locationtech.geowave.core.store.entities.GeoWaveRowIteratorTransformer;
 import org.locationtech.geowave.core.store.entities.GeoWaveRowMergingIterator;
+import org.locationtech.geowave.core.store.util.RowConsumer;
 import org.locationtech.geowave.datastore.cassandra.CassandraRow;
 import org.locationtech.geowave.datastore.cassandra.CassandraRow.CassandraField;
 import org.slf4j.Logger;
@@ -57,7 +60,7 @@ public class BatchedRangeRead<T>
 	private final CassandraOperations operations;
 	private final PreparedStatement preparedRead;
 	private final Collection<SinglePartitionQueryRanges> ranges;
-	private final Collection<Short> internalAdapterIds;
+	private final short[] adapterIds;
 	private final GeoWaveRowIteratorTransformer<T> rowTransformer;
 	Predicate<GeoWaveRow> filter;
 
@@ -69,13 +72,13 @@ public class BatchedRangeRead<T>
 	protected BatchedRangeRead(
 			final PreparedStatement preparedRead,
 			final CassandraOperations operations,
-			final Collection<Short> internalAdapterIds,
+			final short[] adapterIds,
 			final Collection<SinglePartitionQueryRanges> ranges,
 			final GeoWaveRowIteratorTransformer<T> rowTransformer,
 			final Predicate<GeoWaveRow> filter ) {
 		this.preparedRead = preparedRead;
 		this.operations = operations;
-		this.internalAdapterIds = internalAdapterIds;
+		this.adapterIds = adapterIds;
 		this.ranges = ranges;
 		this.rowTransformer = rowTransformer;
 		this.filter = filter;
@@ -113,7 +116,7 @@ public class BatchedRangeRead<T>
 
 				boundRead.set(
 						CassandraField.GW_ADAPTER_ID_KEY.getBindMarkerName(),
-						Lists.newArrayList(internalAdapterIds),
+						Arrays.asList(ArrayUtils.toObject(adapterIds)),
 						TypeCodec.list(TypeCodec.smallInt()));
 				statements.add(boundRead);
 			}
@@ -166,7 +169,7 @@ public class BatchedRangeRead<T>
 							// been any
 							// statements submitted
 							try {
-								results.put(CassandraRowConsumer.POISON);
+								results.put(RowConsumer.POISON);
 							}
 							catch (final InterruptedException e) {
 								LOGGER.error("Interrupted while finishing blocking queue, this may result in deadlock!");
@@ -185,7 +188,7 @@ public class BatchedRangeRead<T>
 						}
 					}
 				},
-				new CassandraRowConsumer(
+				new RowConsumer(
 						results));
 	}
 
@@ -219,22 +222,23 @@ public class BatchedRangeRead<T>
 				final ResultSet result ) {
 			try {
 				rowTransform
-						.apply((Iterator<GeoWaveRow>) (Iterator<? extends GeoWaveRow>) new GeoWaveRowMergingIterator<CassandraRow>(
-								Iterators
-										.filter(
-												Iterators
-														.transform(
-																result.iterator(),
-																new Function<Row, CassandraRow>() {
+						.apply(
+								(Iterator<GeoWaveRow>) (Iterator<? extends GeoWaveRow>) new GeoWaveRowMergingIterator<>(
+										Iterators
+												.filter(
+														Iterators
+																.transform(
+																		result.iterator(),
+																		new Function<Row, CassandraRow>() {
 
-																	@Override
-																	public CassandraRow apply(
-																			final Row row ) {
-																		return new CassandraRow(
-																				row);
-																	}
-																}),
-												filter)))
+																			@Override
+																			public CassandraRow apply(
+																					final Row row ) {
+																				return new CassandraRow(
+																						row);
+																			}
+																		}),
+														filter)))
 						.forEachRemaining(
 								row -> {
 									try {
@@ -276,7 +280,7 @@ public class BatchedRangeRead<T>
 			semaphore.release();
 			if (queryCount.decrementAndGet() <= 0) {
 				try {
-					resultQueue.put(CassandraRowConsumer.POISON);
+					resultQueue.put(RowConsumer.POISON);
 				}
 				catch (final InterruptedException e) {
 					LOGGER.error("Interrupted while finishing blocking queue, this may result in deadlock!");

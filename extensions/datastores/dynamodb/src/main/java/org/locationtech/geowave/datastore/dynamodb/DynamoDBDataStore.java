@@ -1,6 +1,6 @@
 /*******************************************************************************
  * Copyright (c) 2013-2018 Contributors to the Eclipse Foundation
- *   
+ *
  *  See the NOTICE file distributed with this work for additional
  *  information regarding copyright ownership.
  *  All rights reserved. This program and the accompanying materials
@@ -12,7 +12,6 @@ package org.locationtech.geowave.datastore.dynamodb;
 
 import org.locationtech.geowave.core.store.DataStoreOptions;
 import org.locationtech.geowave.core.store.adapter.AdapterIndexMappingStore;
-import org.locationtech.geowave.core.store.adapter.AdapterStore;
 import org.locationtech.geowave.core.store.adapter.InternalAdapterStore;
 import org.locationtech.geowave.core.store.adapter.PersistentAdapterStore;
 import org.locationtech.geowave.core.store.adapter.statistics.DataStatisticsStore;
@@ -34,7 +33,7 @@ public class DynamoDBDataStore extends
 
 	public DynamoDBDataStore(
 			final DynamoDBOperations operations ) {
-		this(
+		super(
 				new IndexStoreImpl(
 						operations,
 						operations.getOptions().getBaseOptions()),
@@ -52,27 +51,5 @@ public class DynamoDBDataStore extends
 				operations.getOptions().getBaseOptions(),
 				new InternalAdapterStoreImpl(
 						operations));
-	}
-
-	public DynamoDBDataStore(
-			final IndexStore indexStore,
-			final PersistentAdapterStore adapterStore,
-			final DataStatisticsStore statisticsStore,
-			final AdapterIndexMappingStore indexMappingStore,
-			final SecondaryIndexDataStore secondaryIndexDataStore,
-			final DynamoDBOperations operations,
-			final DataStoreOptions options,
-			final InternalAdapterStore internalAdapterStore ) {
-		super(
-				indexStore,
-				adapterStore,
-				statisticsStore,
-				indexMappingStore,
-				secondaryIndexDataStore,
-				operations,
-				options,
-				internalAdapterStore);
-
-		secondaryIndexDataStore.setDataStore(this);
 	}
 }

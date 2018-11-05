@@ -14,7 +14,6 @@ import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.text.ParseException;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
 import org.apache.log4j.Level;
@@ -55,21 +54,20 @@ import org.slf4j.LoggerFactory;
 @Environments({
 	Environment.MAP_REDUCE,
 	Environment.KAFKA,
-	Environment.SPARK
 })
 @GeoWaveTestStore(value = {
 	GeoWaveStoreType.ACCUMULO,
 	GeoWaveStoreType.BIGTABLE,
 	GeoWaveStoreType.CASSANDRA,
 	GeoWaveStoreType.DYNAMODB,
-	GeoWaveStoreType.HBASE
+	GeoWaveStoreType.HBASE,
+	GeoWaveStoreType.REDIS
 })
 public class GeoWaveGrpcIT extends
 		AbstractGeoWaveBasicVectorIT
 {
 	private final static Logger LOGGER = LoggerFactory.getLogger(GeoWaveGrpcIT.class);
 	private static File configFile = null;
-	private static GeoWaveGrpcServer server = null;
 	private static GeoWaveGrpcTestClient client = null;
 
 	protected DataStorePluginOptions dataStore;
@@ -386,7 +384,7 @@ public class GeoWaveGrpcIT extends
 		Assert.assertTrue(client.VersionCommand());
 
 		result = client.ListAdapterCommand();
-		Assert.assertTrue(result.contains(GeoWaveGrpcTestUtils.adapterId));
+		Assert.assertTrue(result.contains(GeoWaveGrpcTestUtils.typeName));
 
 		result = client.ListIndexCommand();
 		Assert.assertTrue(result.contains("SPATIAL_IDX"));
@@ -395,8 +393,8 @@ public class GeoWaveGrpcIT extends
 		Assert.assertTrue(!result.equalsIgnoreCase(""));
 
 		result = client.AddIndexGroupCommand();
-		Assert.assertTrue(result.contains("indexgroup." + GeoWaveGrpcTestUtils.indexId + "-group.opts."
-				+ GeoWaveGrpcTestUtils.indexId + ".numPartitions=1"));
+		Assert.assertTrue(result.contains("indexgroup." + GeoWaveGrpcTestUtils.indexName + "-group.opts."
+				+ GeoWaveGrpcTestUtils.indexName + ".numPartitions=1"));
 
 		Assert.assertTrue(client.CalculateStatCommand());
 		Assert.assertTrue(client.RecalculateStatsCommand());
@@ -407,12 +405,12 @@ public class GeoWaveGrpcIT extends
 
 		result = client.RemoveIndexGroupCommand();
 		Assert.assertEquals(
-				"indexgroup." + GeoWaveGrpcTestUtils.indexId + "-group successfully removed",
+				"indexgroup." + GeoWaveGrpcTestUtils.indexName + "-group successfully removed",
 				result);
 
 		result = client.RemoveIndexCommand();
 		Assert.assertEquals(
-				"index." + GeoWaveGrpcTestUtils.indexId + " successfully removed",
+				"index." + GeoWaveGrpcTestUtils.indexName + " successfully removed",
 				result);
 
 		Assert.assertTrue(client.RemoveAdapterCommand());
@@ -476,7 +474,7 @@ public class GeoWaveGrpcIT extends
 
 		final AddIndexCommand indexCommand = new AddIndexCommand();
 		indexCommand.setType("spatial");
-		indexCommand.setParameters(GeoWaveGrpcTestUtils.indexId);
+		indexCommand.setParameters(GeoWaveGrpcTestUtils.indexName);
 		BasicIndexOptions basicIndexOpts = new BasicIndexOptions();
 		basicIndexOpts.setNumPartitions(32);
 		basicIndexOpts.setPartitionStrategy(PartitionStrategy.ROUND_ROBIN);
@@ -503,7 +501,6 @@ public class GeoWaveGrpcIT extends
 		grpcCmdOpts.setNonBlocking(true);
 		startCmd.setCommandOptions(grpcCmdOpts);
 		startCmd.execute(operationParams);
-		server = GeoWaveGrpcServer.getInstance();
 
 		// fire up the client
 		client = new GeoWaveGrpcTestClient(

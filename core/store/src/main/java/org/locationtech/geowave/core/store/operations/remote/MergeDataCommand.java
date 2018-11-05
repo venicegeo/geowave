@@ -19,14 +19,14 @@ import org.locationtech.geowave.core.cli.api.Command;
 import org.locationtech.geowave.core.cli.api.DefaultOperation;
 import org.locationtech.geowave.core.cli.api.OperationParams;
 import org.locationtech.geowave.core.store.adapter.AdapterIndexMappingStore;
-import org.locationtech.geowave.core.store.adapter.AdapterStore;
+import org.locationtech.geowave.core.store.adapter.InternalAdapterStore;
 import org.locationtech.geowave.core.store.adapter.PersistentAdapterStore;
+import org.locationtech.geowave.core.store.api.Index;
 import org.locationtech.geowave.core.store.cli.remote.RemoteSection;
 import org.locationtech.geowave.core.store.cli.remote.options.DataStorePluginOptions;
 import org.locationtech.geowave.core.store.cli.remote.options.IndexLoader;
 import org.locationtech.geowave.core.store.cli.remote.options.IndexPluginOptions;
 import org.locationtech.geowave.core.store.cli.remote.options.StoreLoader;
-import org.locationtech.geowave.core.store.index.PrimaryIndex;
 import org.locationtech.geowave.core.store.operations.DataStoreOperations;
 
 import com.beust.jcommander.JCommander;
@@ -81,21 +81,23 @@ public class MergeDataCommand extends
 
 		inputIndexOptions = indexLoader.getLoadedIndexes();
 		final PersistentAdapterStore adapterStore = inputStoreOptions.createAdapterStore();
+		final InternalAdapterStore internalAdapterStore = inputStoreOptions.createInternalAdapterStore();
 		final AdapterIndexMappingStore adapterIndexMappingStore = inputStoreOptions.createAdapterIndexMappingStore();
 		final DataStoreOperations operations = inputStoreOptions.createDataStoreOperations();
 
 		for (final IndexPluginOptions i : inputIndexOptions) {
-			final PrimaryIndex index = i.createPrimaryIndex();
+			final Index index = i.createIndex();
 			if (!operations.mergeData(
 					index,
 					adapterStore,
+					internalAdapterStore,
 					adapterIndexMappingStore)) {
 				JCommander.getConsole().println(
-						"Unable to merge data within index '" + index.getId().getString() + "'");
+						"Unable to merge data within index '" + index.getName() + "'");
 			}
 			else {
 				JCommander.getConsole().println(
-						"Data successfully merged within index '" + index.getId().getString() + "'");
+						"Data successfully merged within index '" + index.getName() + "'");
 			}
 		}
 

@@ -117,14 +117,14 @@ public class KmeansSparkCommand extends
 		runner.setNumClusters(kMeansSparkOptions.getNumClusters());
 		runner.setNumIterations(kMeansSparkOptions.getNumIterations());
 		runner.setUseTime(kMeansSparkOptions.isUseTime());
-		runner.setAdapterId(kMeansSparkOptions.getAdapterId());
+		runner.setTypeName(kMeansSparkOptions.getTypeName());
 
 		if (kMeansSparkOptions.getEpsilon() != null) {
 			runner.setEpsilon(kMeansSparkOptions.getEpsilon());
 		}
 
-		if (kMeansSparkOptions.getAdapterId() != null) {
-			runner.setAdapterId(kMeansSparkOptions.getAdapterId());
+		if (kMeansSparkOptions.getTypeName() != null) {
+			runner.setTypeName(kMeansSparkOptions.getTypeName());
 		}
 
 		if (kMeansSparkOptions.getCqlFilter() != null) {
@@ -137,11 +137,13 @@ public class KmeansSparkCommand extends
 		runner.setOutputDataStore(outputDataStore);
 		try {
 			runner.run();
-
 		}
 		catch (final IOException e) {
 			throw new RuntimeException(
 					"Failed to execute: " + e.getMessage());
+		}
+		finally {
+			runner.close();
 		}
 
 		return null;

@@ -48,19 +48,19 @@ import org.locationtech.geowave.core.ingest.IngestUtils;
 import org.locationtech.geowave.core.ingest.IngestUtils.URLTYPE;
 import org.locationtech.geowave.core.ingest.local.AbstractLocalFileDriver;
 import org.locationtech.geowave.core.ingest.local.LocalFileIngestDriver;
-import org.locationtech.geowave.core.ingest.local.LocalFileIngestPlugin;
 import org.locationtech.geowave.core.ingest.local.LocalIngestRunData;
 import org.locationtech.geowave.core.ingest.local.LocalInputCommandLineOptions;
 import org.locationtech.geowave.core.ingest.local.LocalPluginFileVisitor.PluginVisitor;
 import org.locationtech.geowave.core.ingest.operations.ConfigAWSCommand;
 import org.locationtech.geowave.core.ingest.operations.options.IngestFormatPluginOptions;
-import org.locationtech.geowave.core.store.DataStore;
-import org.locationtech.geowave.core.store.adapter.WritableDataAdapter;
+import org.locationtech.geowave.core.store.api.DataTypeAdapter;
+import org.locationtech.geowave.core.store.api.DataStore;
 import org.locationtech.geowave.core.store.cli.remote.options.DataStorePluginOptions;
 import org.locationtech.geowave.core.store.cli.remote.options.IndexLoader;
 import org.locationtech.geowave.core.store.cli.remote.options.IndexPluginOptions;
 import org.locationtech.geowave.core.store.cli.remote.options.StoreLoader;
 import org.locationtech.geowave.core.store.cli.remote.options.VisibilityOptions;
+import org.locationtech.geowave.core.store.ingest.LocalFileIngestPlugin;
 import org.locationtech.geowave.mapreduce.operations.ConfigHDFSCommand;
 import org.locationtech.geowave.mapreduce.s3.GeoWaveAmazonS3Factory;
 import org.apache.spark.api.java.JavaRDD;
@@ -104,35 +104,8 @@ public class SparkIngestDriver implements
 		int numPartitions;
 		Path inputPath;
 		String s3EndpointUrl = null;
-
-		if (jsc == null) {
-			String jar = "";
-			try {
-				jar = SparkIngestDriver.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath();
-			}
-			catch (final URISyntaxException e) {
-				LOGGER.error(
-						"Unable to set jar location in spark configuration",
-						e);
-			}
-
-			session = SparkSession
-					.builder()
-					.appName(
-							sparkOptions.getAppName())
-					.master(
-							sparkOptions.getMaster())
-					.config(
-							"spark.driver.host",
-							sparkOptions.getHost())
-					.config(
-							"spark.jars",
-							jar)
-					.getOrCreate();
-
-			jsc = new JavaSparkContext(
-					session.sparkContext());
-		}
+		
+		
 		boolean isS3 = basePath.startsWith(
 				"s3://");
 		boolean isHDFS = !isS3 && (basePath.startsWith(
@@ -162,9 +135,6 @@ public class SparkIngestDriver implements
 		else {
 			LOGGER.warn(
 					"Spark ingest support only S3 or HDFS as input location");
-			close(
-					jsc,
-					session);
 			return false;
 		}
 
@@ -172,9 +142,6 @@ public class SparkIngestDriver implements
 				inputPath))) {
 			LOGGER.error(
 					"Error in accessing Input path " + basePath);
-			close(
-					jsc,
-					session);
 			return false;
 		}
 
@@ -210,16 +177,40 @@ public class SparkIngestDriver implements
 		else {
 			numCores = sparkOptions.getNumCores();
 		}
-
-		jsc.sc().conf().set(
-				"spark.executor.instances",
-				Integer.toString(
-						numExecutors));
-		jsc.sc().conf().set(
-				"spark.executor.cores",
-				Integer.toString(
-						numCores));
 		numPartitions = numExecutors * numCores * 2;
+
+		if (session == null) {
+			String jar = "";
+			try {
+				jar = SparkIngestDriver.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath();
+			}
+			catch (final URISyntaxException e) {
+				LOGGER.error(
+						"Unable to set jar location in spark configuration",
+						e);
+			}
+
+			session = SparkSession
+					.builder()
+					.appName(
+							sparkOptions.getAppName())
+					.master(
+							sparkOptions.getMaster())
+					.config(
+							"spark.driver.host",
+							sparkOptions.getHost())
+					.config(
+							"spark.jars",
+							jar)
+					.config("spark.executor.instances",Integer.toString(
+							numExecutors))
+					.config("spark.executor.cores",Integer.toString(
+							numCores))
+					.getOrCreate();
+
+			jsc = JavaSparkContext.fromSparkContext(
+					session.sparkContext());
+		}
 
 		JavaRDD<URI> fileRDD = jsc.parallelize(
 				Lists.transform(
@@ -279,15 +270,9 @@ public class SparkIngestDriver implements
 								uri);
 					});
 		}
-
-		if (jsc != null) {
-			close(
-					jsc,
-					session);
-		}
-
+	
+		close(session);
 		return true;
-
 	}
 
 	public void processInput(
@@ -331,7 +316,7 @@ public class SparkIngestDriver implements
 
 		// first collect the local file ingest plugins
 		final Map<String, LocalFileIngestPlugin<?>> localFileIngestPlugins = new HashMap<String, LocalFileIngestPlugin<?>>();
-		final List<WritableDataAdapter<?>> adapters = new ArrayList<WritableDataAdapter<?>>();
+		final List<DataTypeAdapter<?>> adapters = new ArrayList<DataTypeAdapter<?>>();
 		for (Entry<String, LocalFileIngestPlugin<?>> pluginEntry : ingestPlugins.entrySet()) {
 
 			if (!IngestUtils.checkIndexesAgainstProvider(
@@ -408,13 +393,7 @@ public class SparkIngestDriver implements
 	}
 
 	public void close(
-			JavaSparkContext jsc,
 			SparkSession session ) {
-		if (jsc != null) {
-			jsc.close();
-			jsc = null;
-		}
-
 		if (session != null) {
 			session.close();
 			session = null;

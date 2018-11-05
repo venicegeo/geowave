@@ -1,6 +1,6 @@
 /*******************************************************************************
  * Copyright (c) 2013-2018 Contributors to the Eclipse Foundation
- *   
+ *
  *  See the NOTICE file distributed with this work for additional
  *  information regarding copyright ownership.
  *  All rights reserved. This program and the accompanying materials
@@ -10,6 +10,10 @@
  ******************************************************************************/
 package org.locationtech.geowave.test.basic;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 import java.awt.image.Raster;
 import java.awt.image.SampleModel;
 import java.awt.image.WritableRaster;
@@ -18,6 +22,7 @@ import java.nio.ByteBuffer;
 
 import org.apache.commons.math.util.MathUtils;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -29,15 +34,21 @@ import org.locationtech.geowave.adapter.raster.adapter.merge.RasterTileMergeStra
 import org.locationtech.geowave.adapter.raster.adapter.merge.SimpleAbstractMergeStrategy;
 import org.locationtech.geowave.adapter.raster.adapter.merge.nodata.NoDataMergeStrategy;
 import org.locationtech.geowave.core.geotime.store.query.IndexOnlySpatialQuery;
-import org.locationtech.geowave.core.index.ByteArrayId;
 import org.locationtech.geowave.core.index.persist.Persistable;
 import org.locationtech.geowave.core.store.CloseableIterator;
-import org.locationtech.geowave.core.store.DataStore;
-import org.locationtech.geowave.core.store.IndexWriter;
+import org.locationtech.geowave.core.store.adapter.InternalAdapterStore;
+import org.locationtech.geowave.core.store.adapter.PersistentAdapterStore;
+import org.locationtech.geowave.core.store.api.DataStore;
+import org.locationtech.geowave.core.store.api.QueryBuilder;
+import org.locationtech.geowave.core.store.api.Writer;
 import org.locationtech.geowave.core.store.cli.remote.options.DataStorePluginOptions;
-import org.locationtech.geowave.core.store.index.PrimaryIndex;
-import org.locationtech.geowave.core.store.query.EverythingQuery;
-import org.locationtech.geowave.core.store.query.QueryOptions;
+import org.locationtech.geowave.core.store.entities.GeoWaveRow;
+import org.locationtech.geowave.core.store.entities.GeoWaveRowIteratorTransformer;
+import org.locationtech.geowave.core.store.operations.DataStoreOperations;
+import org.locationtech.geowave.core.store.operations.ReaderParams;
+import org.locationtech.geowave.core.store.operations.ReaderParamsBuilder;
+import org.locationtech.geowave.core.store.operations.RowReader;
+import org.locationtech.geowave.core.store.util.DataStoreUtils;
 import org.locationtech.geowave.test.GeoWaveITRunner;
 import org.locationtech.geowave.test.TestUtils;
 import org.locationtech.geowave.test.annotation.GeoWaveTestStore;
@@ -49,8 +60,6 @@ import org.slf4j.LoggerFactory;
 import com.vividsolutions.jts.geom.Envelope;
 import com.vividsolutions.jts.geom.GeometryFactory;
 
-import org.junit.Assert;
-
 @RunWith(GeoWaveITRunner.class)
 public class GeoWaveBasicRasterIT extends
 		AbstractGeoWaveIT
@@ -60,7 +69,8 @@ public class GeoWaveBasicRasterIT extends
 		GeoWaveStoreType.BIGTABLE,
 		GeoWaveStoreType.CASSANDRA,
 		GeoWaveStoreType.DYNAMODB,
-		GeoWaveStoreType.HBASE
+		GeoWaveStoreType.HBASE,
+		GeoWaveStoreType.REDIS
 	})
 	protected DataStorePluginOptions dataStoreOptions;
 
@@ -93,6 +103,105 @@ public class GeoWaveBasicRasterIT extends
 						+ "s elapsed.                 *");
 		LOGGER.warn("*                                       *");
 		LOGGER.warn("-----------------------------------------");
+	}
+
+	@Test
+	public void testMergeData()
+			throws Exception {
+		final String coverageName = "testMergeData_SummingMergeStrategy";
+
+		final int tileSize = 32;
+		final double westLon = 45;
+		final double eastLon = 47.8125;
+		final double southLat = -47.8125;
+		final double northLat = -45;
+		final int numBands = 8;
+		final int numRasters = 4;
+
+		ingestGeneralPurpose(
+				coverageName,
+				tileSize,
+				westLon,
+				eastLon,
+				southLat,
+				northLat,
+				numBands,
+				numRasters,
+				new SummingMergeStrategy());
+
+		// Verify correct results
+		queryGeneralPurpose(
+				coverageName,
+				tileSize,
+				westLon,
+				eastLon,
+				southLat,
+				northLat,
+				numBands,
+				numRasters,
+				new SummingExpectedValue());
+
+		final DataStoreOperations operations = dataStoreOptions.createDataStoreOperations();
+		final PersistentAdapterStore adapterStore = dataStoreOptions.createAdapterStore();
+		final InternalAdapterStore internalAdapterStore = dataStoreOptions.createInternalAdapterStore();
+		final short[] adapterIds = new short[1];
+		adapterIds[0] = internalAdapterStore.getAdapterId(coverageName);
+		ReaderParams<GeoWaveRow> params = new ReaderParamsBuilder<GeoWaveRow>(
+				TestUtils.DEFAULT_SPATIAL_INDEX,
+				adapterStore,
+				internalAdapterStore,
+				GeoWaveRowIteratorTransformer.NO_OP_TRANSFORMER).isClientsideRowMerging(
+				true).adapterIds(
+				adapterIds).build();
+		try (RowReader<GeoWaveRow> reader = operations.createReader(params)) {
+			assertTrue(reader.hasNext());
+
+			GeoWaveRow row = reader.next();
+
+			// Assert that the values for the row are not merged.
+			// If server side libraries are enabled, the merging will be done
+			// there.
+			if (!dataStoreOptions.getFactoryOptions().getStoreOptions().isServerSideLibraryEnabled()) {
+				assertEquals(
+						numRasters,
+						row.getFieldValues().length);
+			}
+
+			assertFalse(reader.hasNext());
+		}
+
+		operations.mergeData(
+				TestUtils.DEFAULT_SPATIAL_INDEX,
+				adapterStore,
+				internalAdapterStore,
+				dataStoreOptions.createAdapterIndexMappingStore());
+
+		// Make sure the row was merged
+		try (RowReader<GeoWaveRow> reader = operations.createReader(params)) {
+			assertTrue(reader.hasNext());
+
+			GeoWaveRow row = reader.next();
+
+			// Assert that the values for the row are merged.
+			assertEquals(
+					1,
+					row.getFieldValues().length);
+
+			assertFalse(reader.hasNext());
+		}
+
+		// Verify results are still correct
+		queryGeneralPurpose(
+				coverageName,
+				tileSize,
+				westLon,
+				eastLon,
+				southLat,
+				northLat,
+				numBands,
+				numRasters,
+				new SummingExpectedValue());
+
 	}
 
 	@Test
@@ -220,12 +329,8 @@ public class GeoWaveBasicRasterIT extends
 			throws IOException {
 		final DataStore dataStore = dataStoreOptions.createDataStore();
 
-		try (CloseableIterator<?> it = dataStore.query(
-				new QueryOptions(
-						new ByteArrayId(
-								coverageName),
-						null),
-				new EverythingQuery())) {
+		try (CloseableIterator<?> it = dataStore.query(QueryBuilder.newBuilder().addTypeName(
+				coverageName).build())) {
 
 			// the expected outcome is:
 			// band 1,2,3,4,5,6 has every value set correctly, band 0 has every
@@ -342,9 +447,10 @@ public class GeoWaveBasicRasterIT extends
 				raster1,
 				raster2,
 				tileSize);
-		try (IndexWriter writer = dataStore.createWriter(
+		dataStore.addType(
 				adapter,
-				TestUtils.DEFAULT_SPATIAL_INDEX)) {
+				TestUtils.DEFAULT_SPATIAL_INDEX);
+		try (Writer writer = dataStore.createWriter(adapter.getTypeName())) {
 			writer.write(RasterUtils.createCoverageTypeDouble(
 					coverageName,
 					westLon,
@@ -376,22 +482,15 @@ public class GeoWaveBasicRasterIT extends
 
 		// just ingest a number of rasters
 		final DataStore dataStore = dataStoreOptions.createDataStore();
-		final RasterDataAdapter basicAdapter = RasterUtils.createDataAdapterTypeDouble(
+		final RasterDataAdapter adapter = RasterUtils.createDataAdapterTypeDouble(
 				coverageName,
 				numBands,
 				tileSize,
-				new NoDataMergeStrategy());
-		final RasterDataAdapter mergeStrategyOverriddenAdapter = new RasterDataAdapter(
-				basicAdapter,
-				coverageName,
 				mergeStrategy);
-		basicAdapter.getMetadata().put(
-				"test-key",
-				"test-value");
-		try (IndexWriter writer = dataStore.createWriter(
-
-				mergeStrategyOverriddenAdapter,
-				TestUtils.DEFAULT_SPATIAL_INDEX)) {
+		dataStore.addType(
+				adapter,
+				TestUtils.DEFAULT_SPATIAL_INDEX);
+		try (Writer writer = dataStore.createWriter(adapter.getTypeName())) {
 			for (int r = 0; r < numRasters; r++) {
 				final WritableRaster raster = RasterUtils.createRasterTypeDouble(
 						numBands,
@@ -436,17 +535,14 @@ public class GeoWaveBasicRasterIT extends
 			throws IOException {
 		final DataStore dataStore = dataStoreOptions.createDataStore();
 
-		try (CloseableIterator<?> it = dataStore.query(
-				new QueryOptions(
-						new ByteArrayId(
-								coverageName),
-						null),
+		try (CloseableIterator<?> it = dataStore.query(QueryBuilder.newBuilder().addTypeName(
+				coverageName).constraints(
 				new IndexOnlySpatialQuery(
 						new GeometryFactory().toGeometry(new Envelope(
 								westLon,
 								eastLon,
 								southLat,
-								northLat))))) {
+								northLat)))).build())) {
 			// the expected outcome is:
 			// band 1,2,3,4,5,6 has every value set correctly, band 0 has every
 			// even row set correctly and every odd row should be NaN, and band

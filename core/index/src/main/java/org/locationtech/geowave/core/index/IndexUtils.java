@@ -1,6 +1,6 @@
 /*******************************************************************************
  * Copyright (c) 2013-2018 Contributors to the Eclipse Foundation
- *   
+ *
  *  See the NOTICE file distributed with this work for additional
  *  information regarding copyright ownership.
  *  All rights reserved. This program and the accompanying materials
@@ -10,6 +10,7 @@
  ******************************************************************************/
 package org.locationtech.geowave.core.index;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
@@ -164,12 +165,20 @@ public class IndexUtils
 		return binnedQueries;
 	}
 
-	public static int getBitPositionFromSubsamplingArray(
+	public static int getBitPositionOnSortKeyFromSubsamplingArray(
 			final NumericIndexStrategy indexStrategy,
 			final double[] maxResolutionSubsamplingPerDimension ) {
 		return (int) Math.round(getDimensionalBitsUsed(
 				indexStrategy,
-				maxResolutionSubsamplingPerDimension) + (8 * indexStrategy.getPartitionKeyLength()));
+				maxResolutionSubsamplingPerDimension));
+	}
+
+	public static int getBitPositionFromSubsamplingArray(
+			final NumericIndexStrategy indexStrategy,
+			final double[] maxResolutionSubsamplingPerDimension ) {
+		return getBitPositionOnSortKeyFromSubsamplingArray(
+				indexStrategy,
+				maxResolutionSubsamplingPerDimension) + (8 * indexStrategy.getPartitionKeyLength());
 	}
 
 	public static byte[] getNextRowForSkip(
@@ -185,16 +194,13 @@ public class IndexUtils
 		if (extraBits > 0) {
 			numBytes++;
 		}
-
 		// Copy affected bytes
-		final byte[] rowCopy = new byte[numBytes];
-		System.arraycopy(
+
+		final byte[] rowCopy = Arrays.copyOf(
 				row,
-				0,
-				rowCopy,
-				0,
-				rowCopy.length);
-		int lastByte = rowCopy.length - 1;
+				numBytes);
+
+		final int lastByte = rowCopy.length - 1;
 
 		// Turn on all bits after the bit position
 		rowCopy[lastByte] |= 0xFF >> (extraBits + 1);
@@ -242,7 +248,7 @@ public class IndexUtils
 		return Math.log(v) / Math.log(2);
 	}
 
-	public static Set<ByteArrayId> getQueryPartitionKeys(
+	public static Set<ByteArray> getQueryPartitionKeys(
 			final NumericIndexStrategy strategy,
 			final MultiDimensionalNumericData queryData,
 			final IndexMetaData... hints ) {
@@ -251,9 +257,9 @@ public class IndexUtils
 				hints);
 		return Sets.newHashSet(Collections2.transform(
 				queryRanges.getPartitionQueryRanges(),
-				new Function<SinglePartitionQueryRanges, ByteArrayId>() {
+				new Function<SinglePartitionQueryRanges, ByteArray>() {
 					@Override
-					public ByteArrayId apply(
+					public ByteArray apply(
 							@Nonnull
 							final SinglePartitionQueryRanges input ) {
 						return input.getPartitionKey();
@@ -261,15 +267,15 @@ public class IndexUtils
 				}));
 	}
 
-	public static Set<ByteArrayId> getInsertionPartitionKeys(
+	public static Set<ByteArray> getInsertionPartitionKeys(
 			final NumericIndexStrategy strategy,
 			final MultiDimensionalNumericData insertionData ) {
 		final InsertionIds insertionIds = strategy.getInsertionIds(insertionData);
 		return Sets.newHashSet(Collections2.transform(
 				insertionIds.getPartitionKeys(),
-				new Function<SinglePartitionInsertionIds, ByteArrayId>() {
+				new Function<SinglePartitionInsertionIds, ByteArray>() {
 					@Override
-					public ByteArrayId apply(
+					public ByteArray apply(
 							@Nonnull
 							final SinglePartitionInsertionIds input ) {
 						return input.getPartitionKey();

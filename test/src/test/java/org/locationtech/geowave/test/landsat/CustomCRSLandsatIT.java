@@ -1,6 +1,6 @@
 /*******************************************************************************
  * Copyright (c) 2013-2018 Contributors to the Eclipse Foundation
- *   
+ *
  *  See the NOTICE file distributed with this work for additional
  *  information regarding copyright ownership.
  *  All rights reserved. This program and the accompanying materials
@@ -23,8 +23,6 @@ import javax.imageio.ImageIO;
 import javax.media.jai.Interpolation;
 import javax.media.jai.PlanarImage;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.apache.commons.lang.SystemUtils;
 import org.geotools.coverage.grid.GridCoverage2D;
 import org.geotools.geometry.GeneralEnvelope;
@@ -36,12 +34,12 @@ import org.junit.runner.RunWith;
 import org.locationtech.geowave.adapter.raster.plugin.GeoWaveRasterConfig;
 import org.locationtech.geowave.adapter.raster.plugin.GeoWaveRasterReader;
 import org.locationtech.geowave.core.cli.api.OperationParams;
-import org.locationtech.geowave.core.geotime.GeometryUtils;
 import org.locationtech.geowave.core.geotime.ingest.SpatialDimensionalityTypeProvider.SpatialIndexBuilder;
+import org.locationtech.geowave.core.geotime.util.GeometryUtils;
 import org.locationtech.geowave.core.store.GeoWaveStoreFinder;
 import org.locationtech.geowave.core.store.StoreFactoryOptions;
+import org.locationtech.geowave.core.store.api.Index;
 import org.locationtech.geowave.core.store.cli.remote.options.DataStorePluginOptions;
-import org.locationtech.geowave.core.store.index.PrimaryIndex;
 import org.locationtech.geowave.format.landsat8.BandFeatureIterator;
 import org.locationtech.geowave.format.landsat8.Landsat8BasicCommandLineOptions;
 import org.locationtech.geowave.format.landsat8.Landsat8DownloadCommandLineOptions;
@@ -53,6 +51,8 @@ import org.locationtech.geowave.test.TestUtils;
 import org.locationtech.geowave.test.annotation.GeoWaveTestStore;
 import org.locationtech.geowave.test.annotation.GeoWaveTestStore.GeoWaveStoreType;
 import org.locationtech.geowave.test.basic.AbstractGeoWaveIT;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import freemarker.template.Configuration;
 import freemarker.template.Template;
@@ -95,7 +95,7 @@ public class CustomCRSLandsatIT extends
 				throws Exception {
 			store = dataStoreOptions.createDataStore();
 			dataStorePluginOptions = dataStoreOptions;
-			indices = new PrimaryIndex[] {
+			indices = new Index[] {
 				new SpatialIndexBuilder().setCrs(
 						"EPSG:3857").createIndex()
 			};
@@ -112,7 +112,8 @@ public class CustomCRSLandsatIT extends
 		GeoWaveStoreType.ACCUMULO,
 		GeoWaveStoreType.BIGTABLE,
 		GeoWaveStoreType.CASSANDRA,
-		GeoWaveStoreType.HBASE
+		GeoWaveStoreType.HBASE,
+		GeoWaveStoreType.REDIS
 	}, namespace = "customcrs")
 	protected DataStorePluginOptions dataStoreOptions;
 	private static final String CUSTOM_REFERENCE_LANDSAT_IMAGE_PATH = "src/test/resources/landsat/expected_custom.png";
@@ -150,6 +151,7 @@ public class CustomCRSLandsatIT extends
 		LOGGER.warn("-----------------------------------------");
 	}
 
+	@Override
 	protected DataStorePluginOptions getDataStorePluginOptions() {
 		return dataStoreOptions;
 	}
@@ -193,6 +195,7 @@ public class CustomCRSLandsatIT extends
 		ingestOptions.setCreatePyramid(false);
 		ingestOptions.setCreateHistogram(false);
 		ingestOptions.setCoverageName("test");
+		ingestOptions.setTileSize(128);
 		// crop to the specified bbox
 		ingestOptions.setCropToSpatialConstraint(true);
 		final RasterIngestTester runner = new RasterIngestTester(
@@ -254,9 +257,9 @@ public class CustomCRSLandsatIT extends
 				null);
 		final RenderedImage result = gridCoverage.getRenderedImage();
 
-		BufferedImage img = PlanarImage.wrapRenderedImage(
+		final BufferedImage img = PlanarImage.wrapRenderedImage(
 				result).getAsBufferedImage();
-		BufferedImage swappedRedBlueImg = new BufferedImage(
+		final BufferedImage swappedRedBlueImg = new BufferedImage(
 				img.getWidth(),
 				img.getHeight(),
 				BufferedImage.TYPE_INT_RGB);
@@ -266,7 +269,7 @@ public class CustomCRSLandsatIT extends
 		// colored (B2 is blue, B3 is green, and B4 is red)
 		for (int y = 0; y < img.getHeight(); y++) {
 			for (int x = 0; x < img.getWidth(); x++) {
-				int rgb = img.getRGB(
+				final int rgb = img.getRGB(
 						x,
 						y);
 				// this will swap the red and blue channel/band

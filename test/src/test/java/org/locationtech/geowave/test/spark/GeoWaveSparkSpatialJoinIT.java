@@ -1,6 +1,6 @@
 /*******************************************************************************
  * Copyright (c) 2013-2018 Contributors to the Eclipse Foundation
- *   
+ *
  *  See the NOTICE file distributed with this work for additional
  *  information regarding copyright ownership.
  *  All rights reserved. This program and the accompanying materials
@@ -29,19 +29,18 @@ import org.locationtech.geowave.analytic.spark.sparksql.SimpleFeatureDataFrame;
 import org.locationtech.geowave.analytic.spark.sparksql.udf.GeomFunctionRegistry;
 import org.locationtech.geowave.analytic.spark.sparksql.udf.GeomWithinDistance;
 import org.locationtech.geowave.analytic.spark.spatial.SpatialJoinRunner;
-import org.locationtech.geowave.core.index.ByteArrayId;
 import org.locationtech.geowave.core.store.adapter.InternalDataAdapter;
+import org.locationtech.geowave.core.store.api.QueryBuilder;
 import org.locationtech.geowave.core.store.cli.remote.options.DataStorePluginOptions;
-import org.locationtech.geowave.core.store.query.QueryOptions;
 import org.locationtech.geowave.test.GeoWaveITRunner;
 import org.locationtech.geowave.test.TestUtils;
 import org.locationtech.geowave.test.TestUtils.DimensionalityType;
 import org.locationtech.geowave.test.annotation.Environments;
-import org.locationtech.geowave.test.annotation.GeoWaveTestStore;
 import org.locationtech.geowave.test.annotation.Environments.Environment;
+import org.locationtech.geowave.test.annotation.GeoWaveTestStore;
 import org.locationtech.geowave.test.annotation.GeoWaveTestStore.GeoWaveStoreType;
+import org.locationtech.geowave.test.annotation.NamespaceOverride;
 import org.locationtech.geowave.test.basic.AbstractGeoWaveBasicVectorIT;
-import org.locationtech.geowave.test.spark.SparkTestEnvironment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,18 +48,22 @@ import org.slf4j.LoggerFactory;
 @Environments({
 	Environment.SPARK
 })
+@GeoWaveTestStore(value = {
+	GeoWaveStoreType.ACCUMULO,
+	GeoWaveStoreType.BIGTABLE,
+	GeoWaveStoreType.DYNAMODB,
+	GeoWaveStoreType.CASSANDRA,
+	GeoWaveStoreType.REDIS
+})
 public class GeoWaveSparkSpatialJoinIT extends
 		AbstractGeoWaveBasicVectorIT
 {
 	private final static Logger LOGGER = LoggerFactory.getLogger(GeoWaveSparkSpatialJoinIT.class);
 
-	@GeoWaveTestStore(value = {
-		GeoWaveStoreType.ACCUMULO,
-		GeoWaveStoreType.BIGTABLE,
-		GeoWaveStoreType.DYNAMODB,
-		GeoWaveStoreType.CASSANDRA
-	})
-	protected DataStorePluginOptions dataStore;
+	protected DataStorePluginOptions hailStore;
+
+	@NamespaceOverride("geowave_tornado")
+	protected DataStorePluginOptions tornadoStore;
 
 	private static long startMillis;
 	private static SparkSession session = null;
@@ -102,29 +105,27 @@ public class GeoWaveSparkSpatialJoinIT extends
 			throws Exception {
 
 		session = SparkTestEnvironment.getInstance().getDefaultSession();
-		context = SparkTestEnvironment.getInstance().getDefaultContext();
+		context = session.sparkContext();
 		GeomFunctionRegistry.registerGeometryFunctions(session);
-		LOGGER.debug("Testing DataStore Type: " + dataStore.getType());
+		LOGGER.debug("Testing DataStore Type: " + hailStore.getType());
 		long mark = System.currentTimeMillis();
 		ingestHailandTornado();
 		long dur = (System.currentTimeMillis() - mark);
 
-		ByteArrayId hail_adapter = new ByteArrayId(
-				"hail");
-		ByteArrayId tornado_adapter = new ByteArrayId(
-				"tornado_tracks");
-		GeomWithinDistance distancePredicate = new GeomWithinDistance(
+		final String hail_adapter = "hail";
+		final String tornado_adapter = "tornado_tracks";
+		final GeomWithinDistance distancePredicate = new GeomWithinDistance(
 				0.01);
-		String sqlHail = "select hail.* from hail, tornado where GeomDistance(hail.geom,tornado.geom) <= 0.01";
-		String sqlTornado = "select tornado.* from hail, tornado where GeomDistance(hail.geom,tornado.geom) <= 0.01";
+		final String sqlHail = "select hail.* from hail, tornado where GeomDistance(hail.geom,tornado.geom) <= 0.01";
+		final String sqlTornado = "select tornado.* from hail, tornado where GeomDistance(hail.geom,tornado.geom) <= 0.01";
 
-		SpatialJoinRunner runner = new SpatialJoinRunner(
+		final SpatialJoinRunner runner = new SpatialJoinRunner(
 				session);
-		runner.setLeftStore(dataStore);
-		runner.setLeftAdapterId(hail_adapter);
+		runner.setLeftStore(hailStore);
+		runner.setLeftAdapterTypeName(hail_adapter);
 
-		runner.setRightStore(dataStore);
-		runner.setRightAdapterId(tornado_adapter);
+		runner.setRightStore(tornadoStore);
+		runner.setRightAdapterTypeName(tornado_adapter);
 
 		runner.setPredicate(distancePredicate);
 		loadRDDs(
@@ -142,28 +143,28 @@ public class GeoWaveSparkSpatialJoinIT extends
 			LOGGER.error("Async error in join");
 			e.printStackTrace();
 		}
-		catch (IOException e) {
+		catch (final IOException e) {
 			LOGGER.error("IO error in join");
 			e.printStackTrace();
 		}
 		hailIndexedCount = runner.getLeftResults().getRawRDD().count();
 		tornadoIndexedCount = runner.getRightResults().getRawRDD().count();
-		long indexJoinDur = (System.currentTimeMillis() - mark);
+		final long indexJoinDur = (System.currentTimeMillis() - mark);
 		LOGGER.warn("Indexed Result Count: " + (hailIndexedCount + tornadoIndexedCount));
-		SimpleFeatureDataFrame indexHailFrame = new SimpleFeatureDataFrame(
+		final SimpleFeatureDataFrame indexHailFrame = new SimpleFeatureDataFrame(
 				session);
-		SimpleFeatureDataFrame indexTornadoFrame = new SimpleFeatureDataFrame(
+		final SimpleFeatureDataFrame indexTornadoFrame = new SimpleFeatureDataFrame(
 				session);
 
 		indexTornadoFrame.init(
-				dataStore,
+				tornadoStore,
 				tornado_adapter);
-		Dataset<Row> indexedTornado = indexTornadoFrame.getDataFrame(runner.getRightResults());
+		final Dataset<Row> indexedTornado = indexTornadoFrame.getDataFrame(runner.getRightResults());
 
 		indexHailFrame.init(
-				dataStore,
+				hailStore,
 				hail_adapter);
-		Dataset<Row> indexedHail = indexHailFrame.getDataFrame(runner.getLeftResults());
+		final Dataset<Row> indexedHail = indexHailFrame.getDataFrame(runner.getLeftResults());
 
 		LOGGER.warn("------------ Running Brute force spatial join. ----------");
 		dur = runBruteForceJoin(
@@ -190,7 +191,8 @@ public class GeoWaveSparkSpatialJoinIT extends
 				"Subtraction between brute force join and indexed Tornado should result in count of 0",
 				(subtractedFrame.count() == 0));
 
-		TestUtils.deleteAll(dataStore);
+		TestUtils.deleteAll(hailStore);
+		TestUtils.deleteAll(tornadoStore);
 	}
 
 	private void ingestHailandTornado()
@@ -199,7 +201,7 @@ public class GeoWaveSparkSpatialJoinIT extends
 
 		// ingest both lines and points
 		TestUtils.testLocalIngest(
-				dataStore,
+				hailStore,
 				DimensionalityType.SPATIAL,
 				HAIL_SHAPEFILE_FILE,
 				1);
@@ -210,7 +212,7 @@ public class GeoWaveSparkSpatialJoinIT extends
 		mark = System.currentTimeMillis();
 
 		TestUtils.testLocalIngest(
-				dataStore,
+				tornadoStore,
 				DimensionalityType.SPATIAL,
 				TORNADO_TRACKS_SHAPEFILE_FILE,
 				1);
@@ -221,63 +223,64 @@ public class GeoWaveSparkSpatialJoinIT extends
 	}
 
 	private void loadRDDs(
-			ByteArrayId hail_adapter,
-			ByteArrayId tornado_adapter ) {
+			final String hail_adapter,
+			final String tornado_adapter ) {
 
-		short hailInternalAdapterId = dataStore.createInternalAdapterStore().getInternalAdapterId(
+		final short hailInternalAdapterId = hailStore.createInternalAdapterStore().getAdapterId(
 				hail_adapter);
 		// Write out the hull features
-		InternalDataAdapter<?> hailAdapter = dataStore.createAdapterStore().getAdapter(
+		final InternalDataAdapter<?> hailAdapter = hailStore.createAdapterStore().getAdapter(
 				hailInternalAdapterId);
-		short tornadoInternalAdapterId = dataStore.createInternalAdapterStore().getInternalAdapterId(
+		final short tornadoInternalAdapterId = tornadoStore.createInternalAdapterStore().getAdapterId(
 				tornado_adapter);
-		InternalDataAdapter<?> tornadoAdapter = dataStore.createAdapterStore().getAdapter(
+		final InternalDataAdapter<?> tornadoAdapter = tornadoStore.createAdapterStore().getAdapter(
 				tornadoInternalAdapterId);
 		try {
-			RDDOptions hailOpts = new RDDOptions();
-			hailOpts.setQueryOptions(new QueryOptions(
-					hailAdapter.getAdapter()));
+			final RDDOptions hailOpts = new RDDOptions();
+			hailOpts.setQuery(QueryBuilder.newBuilder().addTypeName(
+					hailAdapter.getTypeName()).build());
 			hailRDD = GeoWaveRDDLoader.loadRDD(
 					context,
-					dataStore,
+					hailStore,
 					hailOpts);
 
-			RDDOptions tornadoOpts = new RDDOptions();
-			tornadoOpts.setQueryOptions(new QueryOptions(
-					tornadoAdapter.getAdapter()));
+			final RDDOptions tornadoOpts = new RDDOptions();
+			tornadoOpts.setQuery(QueryBuilder.newBuilder().addTypeName(
+					tornadoAdapter.getTypeName()).build());
 			tornadoRDD = GeoWaveRDDLoader.loadRDD(
 					context,
-					dataStore,
+					tornadoStore,
 					tornadoOpts);
 		}
 		catch (final Exception e) {
 			LOGGER.error("Could not load rdds for test");
 			e.printStackTrace();
-			TestUtils.deleteAll(dataStore);
+			TestUtils.deleteAll(hailStore);
+			TestUtils.deleteAll(tornadoStore);
 			Assert.fail();
 		}
 	}
 
 	private long runBruteForceJoin(
-			ByteArrayId hail_adapter,
-			ByteArrayId tornado_adapter,
-			String sqlHail,
-			String sqlTornado ) {
-		long mark = System.currentTimeMillis();
-		SimpleFeatureDataFrame hailFrame = new SimpleFeatureDataFrame(
+			final String hail_adapter,
+			final String tornado_adapter,
+			final String sqlHail,
+			final String sqlTornado ) {
+		final long mark = System.currentTimeMillis();
+		final SimpleFeatureDataFrame hailFrame = new SimpleFeatureDataFrame(
 				session);
-		SimpleFeatureDataFrame tornadoFrame = new SimpleFeatureDataFrame(
+		final SimpleFeatureDataFrame tornadoFrame = new SimpleFeatureDataFrame(
 				session);
 
 		tornadoFrame.init(
-				dataStore,
+				tornadoStore,
 				tornado_adapter);
 		tornadoFrame.getDataFrame(
 				tornadoRDD).createOrReplaceTempView(
 				"tornado");
 
 		hailFrame.init(
-				dataStore,
+				hailStore,
 				hail_adapter);
 		hailFrame.getDataFrame(
 				hailRDD).createOrReplaceTempView(
@@ -292,13 +295,13 @@ public class GeoWaveSparkSpatialJoinIT extends
 		tornadoBruteResults = tornadoBruteResults.dropDuplicates();
 		tornadoBruteResults.cache();
 		tornadoBruteCount = tornadoBruteResults.count();
-		long dur = (System.currentTimeMillis() - mark);
+		final long dur = (System.currentTimeMillis() - mark);
 		LOGGER.warn("Brute Result Count: " + (tornadoBruteCount + hailBruteCount));
 		return dur;
 	}
 
 	@Override
 	protected DataStorePluginOptions getDataStorePluginOptions() {
-		return dataStore;
+		return hailStore;
 	}
 }
