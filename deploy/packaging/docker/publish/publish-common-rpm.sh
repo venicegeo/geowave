@@ -102,4 +102,26 @@ cp -fR ${WORKSPACE}/${ARGS[buildroot]}/TARBALL/*.tar.gz ${LOCAL_REPO_DIR}/${ARGS
 # up and fail. the ha* commands are from the hatools rpm available via EPEL.
 hatimerun -t 10:00 \
 halockrun -c ${LOCK_DIR}/rpmrepo \
+
+# Add pgp config so we can generate a key automatically
+RPMDIR=${LOCAL_REPO_DIR}/${ARGS[repo]}/${BUILD_TYPE}/${ARGS[arch]}/
+echo << EOF > pgp-key.conf
+%no-protection
+Key-Type: default
+Subkey-Type: default
+Name-Real: VeniceGeo Jenkins
+Name-Email: jenkins@venicegeo.io
+Expire-Date: 0
+EOF
+
+# Generate the key that rpmsign will use to sign the rpms
+gpg --verbose --gen-key --no-tty --batch pgp-key.conf
+
+echo "%_gpg_name jenkins@venicegeo.io" >> $HOME/.rpmmacros
+
+#@TODO preseed the gpg with a passphrase otherwise you get an ncurses prompt
+for RPM in $RPMDIR; do
+    rpmsign --addsign --key-id=jenkins@venicegeo.io $RPM
+done
+
 createrepo --update --workers 2 ${LOCAL_REPO_DIR}/${ARGS[repo]}/${BUILD_TYPE}/${ARGS[arch]}/
