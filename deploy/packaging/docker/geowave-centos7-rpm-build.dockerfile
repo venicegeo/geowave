@@ -2,7 +2,7 @@ FROM centos:centos7
 
 RUN yum -y install asciidoc rpm-build rpm-sign unzip xmlto zip wget \
     ruby-devel autoconf gcc make rpm-build rubygems automake \
-    java-1.8.0-openjdk java-1.8.0-openjdk-devel libtool && \
+    java-1.8.0-openjdk java-1.8.0-openjdk-devel libtool expect && \
     yum clean all && \
     cd /tmp && curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip" && \
     unzip awscli-bundle.zip && \

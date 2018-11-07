@@ -104,7 +104,7 @@ hatimerun -t 10:00 \
 halockrun -c ${LOCK_DIR}/rpmrepo \
 
 # Add pgp config so we can generate a key automatically
-RPMDIR=${LOCAL_REPO_DIR}/${ARGS[repo]}/${BUILD_TYPE}/${ARGS[arch]}/
+RPMDIR=${LOCAL_REPO_DIR}/${ARGS[repo]}/${BUILD_TYPE}/${ARGS[arch]}
 echo << EOF > pgp-key.conf
 %no-protection
 Key-Type: default
@@ -117,11 +117,13 @@ EOF
 # Generate the key that rpmsign will use to sign the rpms
 gpg --verbose --gen-key --no-tty --batch pgp-key.conf
 
-echo "%_gpg_name jenkins@venicegeo.io" >> $HOME/.rpmmacros
+#Export the public key and copy it to the repo root
+gpg --export --armor jenkins@venicegeo.io > $RPMDIR/YUM-GPG-KEY-VENICE-GEOWAVE
 
-#@TODO preseed the gpg with a passphrase otherwise you get an ncurses prompt
-for RPM in $RPMDIR; do
-    rpmsign --addsign --key-id=jenkins@venicegeo.io $RPM
+#GPG has no option to not run interactively, use expect to hit enter for no 
+# passphrase on the key
+for RPM in $(ls $RPMDIR/*.rpm); do
+  /usr/bin/expect -c "spawn rpmsign --addsign --key-id=jenkins@venicegeo.io $RPM;expect -re {Enter pass phrase: $};send -- '\r';"
 done
 
 createrepo --update --workers 2 ${LOCAL_REPO_DIR}/${ARGS[repo]}/${BUILD_TYPE}/${ARGS[arch]}/
