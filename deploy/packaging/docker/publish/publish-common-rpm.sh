@@ -126,5 +126,4 @@ for RPM in $(ls $RPMDIR/*.rpm); do
   /usr/bin/expect -c "spawn rpmsign --addsign --key-id=jenkins@venicegeo.io $RPM;expect -re {Enter pass phrase: $};send -- '\r';"
 done
 
-echo "Creating rpm rpository..."
 createrepo --update --workers 2 ${LOCAL_REPO_DIR}/${ARGS[repo]}/${BUILD_TYPE}/${ARGS[arch]}/
