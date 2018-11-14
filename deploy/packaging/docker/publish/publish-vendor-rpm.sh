@@ -1,6 +1,6 @@
 #-------------------------------------------------------------------------------
 # Copyright (c) 2013-2018 Contributors to the Eclipse Foundation
-# 
+#
 # See the NOTICE file distributed with this work for additional
 # information regarding copyright ownership.
 # All rights reserved. This program and the accompanying materials
@@ -14,7 +14,7 @@
 # reindexing the existing rpm repo
 #
 
-# This script runs with a volume mount to $WORKSPACE, this ensures that any signal failure will leave all of the files $WORKSPACE editable by the host  
+# This script runs with a volume mount to $WORKSPACE, this ensures that any signal failure will leave all of the files $WORKSPACE editable by the host
 trap 'chmod -R 777 $WORKSPACE/deploy/packaging/rpm' EXIT
 trap 'chmod -R 777 $WORKSPACE/deploy/packaging/rpm && exit' ERR
 
@@ -90,4 +90,28 @@ popd
 # up and fail. the ha* commands are from the hatools rpm available via EPEL.
 hatimerun -t 10:00 \
 halockrun -c ${LOCK_DIR}/rpmrepo \
+
+# Add pgp config so we can generate a key automatically
+RPMDIR=${LOCAL_REPO_DIR}/${ARGS[repo]}/${BUILD_TYPE}/${ARGS[arch]}
+echo << EOF > pgp-key.conf
+%no-protection
+Key-Type: default
+Subkey-Type: default
+Name-Real: VeniceGeo Jenkins
+Name-Email: jenkins@venicegeo.io
+Expire-Date: 0
+EOF
+
+# Generate the key that rpmsign will use to sign the rpms
+gpg --verbose --gen-key --no-tty --batch pgp-key.conf
+
+#Export the public key and copy it to the repo root
+gpg --export --armor jenkins@venicegeo.io > $RPMDIR/YUM-GPG-KEY-VENICE-GEOWAVE
+
+#GPG has no option to not run interactively, use expect to hit enter for no
+# passphrase on the key
+for RPM in $(ls $RPMDIR/*.rpm); do
+  /usr/bin/expect -c "spawn rpmsign --addsign --key-id=jenkins@venicegeo.io $RPM;expect -re {Enter pass phrase: $};send -- '\r';"
+done
+
 createrepo --update --workers 2 ${LOCAL_REPO_DIR}/${ARGS[repo]}/${BUILD_TYPE}/${ARGS[arch]}/
