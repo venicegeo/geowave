@@ -83,14 +83,6 @@ for i in *.jar; do cp "${i}" ${LOCAL_REPO_DIR}/${ARGS[repo]}/${BUILD_TYPE}-jars/
 for i in *.war; do cp "${i}" ${LOCAL_REPO_DIR}/${ARGS[repo]}/${BUILD_TYPE}-jars/JAR/"${i%.war}${TIME_TAG_STR}.war" ; done
 popd
 
-# When several processes run createrepo concurrently they will often fail with problems trying to
-# access index files that are in the process of being overwritten by the other processes. The command
-# below uses two utilities that will cause calls to createrepo (from this script) to wait to gain an
-# exclusive file lock before proceeding with a maximum wait time set at 10 minutes before they give
-# up and fail. the ha* commands are from the hatools rpm available via EPEL.
-hatimerun -t 10:00 \
-halockrun -c ${LOCK_DIR}/rpmrepo \
-
 # Add pgp config so we can generate a key automatically
 RPMDIR=${LOCAL_REPO_DIR}/${ARGS[repo]}/${BUILD_TYPE}/${ARGS[arch]}
 echo << EOF > pgp-key.conf
@@ -113,5 +105,14 @@ gpg --export --armor jenkins@venicegeo.io > $RPMDIR/YUM-GPG-KEY-VENICE-GEOWAVE
 for RPM in $(ls $RPMDIR/*.rpm); do
   /usr/bin/expect -c "spawn rpmsign --addsign --key-id=jenkins@venicegeo.io $RPM;expect -re {Enter pass phrase: $};send -- '\r';"
 done
+
+
+# When several processes run createrepo concurrently they will often fail with problems trying to
+# access index files that are in the process of being overwritten by the other processes. The command
+# below uses two utilities that will cause calls to createrepo (from this script) to wait to gain an
+# exclusive file lock before proceeding with a maximum wait time set at 10 minutes before they give
+# up and fail. the ha* commands are from the hatools rpm available via EPEL.
+hatimerun -t 10:00 \
+halockrun -c ${LOCK_DIR}/rpmrepo \
 
 createrepo --update --workers 2 ${LOCAL_REPO_DIR}/${ARGS[repo]}/${BUILD_TYPE}/${ARGS[arch]}/
